@@ -2,7 +2,9 @@
 
 让一只白发紫瞳的小龙娘，陪你看 Codex 的剩余额度。
 
-**Windows / macOS 桌面挂件 · 自动识别套餐与额度窗口 · 中文语录 · 当前版本 1.3.1**
+**Windows / macOS 桌面挂件 · 自动识别套餐与额度窗口 · 中文语录 · 当前正式版 1.3.2**
+
+Windows 1.3.2 新增独立桌面模式、统一菜单与启动等待；macOS 保留原有界面，共享额度后端同步更新。两个平台使用同一版本号分别提供安装包。
 
 [**下载最新版**](https://github.com/T7moris/GPT-Niang-Usage-Widget/releases/latest) · [Windows 安装](#windows-安装) · [macOS 安装](#macos-安装) · [更新记录](更新记录.md) · [反馈问题](https://github.com/T7moris/GPT-Niang-Usage-Widget/issues/new)
 
@@ -46,10 +48,10 @@ node /Applications/GPTNiangMac.app/Contents/Resources/Backend/runtime/detect-pla
 
 在 [Release 下载页](https://github.com/T7moris/GPT-Niang-Usage-Widget/releases/latest) 的 **Assets** 中选择自己的系统：
 
-| 系统 | v1.3.1 安装包 | 安装入口 |
+| 系统 | v1.3.2 安装包 | 安装入口 |
 | --- | --- | --- |
-| Windows 10 / 11 | [gpt-niang-usage-widget-v1.3.1-windows.zip](https://github.com/T7moris/GPT-Niang-Usage-Widget/releases/download/v1.3.1/gpt-niang-usage-widget-v1.3.1-windows.zip) | 解压后运行 `安装GPT娘.cmd` |
-| macOS 13+，Apple Silicon / Intel | [gpt-niang-usage-widget-v1.3.1-macos-universal.zip](https://github.com/T7moris/GPT-Niang-Usage-Widget/releases/download/v1.3.1/gpt-niang-usage-widget-v1.3.1-macos-universal.zip) | 解压后打开 `GPTNiangMac.app` |
+| Windows 10 / 11 | [gpt-niang-usage-widget-v1.3.2-windows.zip](https://github.com/T7moris/GPT-Niang-Usage-Widget/releases/download/v1.3.2/gpt-niang-usage-widget-v1.3.2-windows.zip) | 解压后运行 `安装GPT娘.cmd` |
+| macOS 13+，Apple Silicon / Intel | [gpt-niang-usage-widget-v1.3.2-macos-universal.zip](https://github.com/T7moris/GPT-Niang-Usage-Widget/releases/download/v1.3.2/gpt-niang-usage-widget-v1.3.2-macos-universal.zip) | 解压后打开 `GPTNiangMac.app` |
 
 GitHub 自动附带的 **Source code** 和 **Code → Download ZIP** 是源码，不是上述安装包。Mac 下载包内已包含通用应用，不需要 Swift 或 Xcode；Intel 和较旧 macOS 的实际界面表现仍需真机验证。尚无 Linux 版本。
 
@@ -74,18 +76,18 @@ Mac 的位置跟随目标为 60 Hz，仍使用轮询，不能保证拖动时零�
 
 ### 安装包校验（建议）
 
-同一 [v1.3.1 Release](https://github.com/T7moris/GPT-Niang-Usage-Widget/releases/tag/v1.3.1) 的 **[SHA256SUMS.txt](https://github.com/T7moris/GPT-Niang-Usage-Widget/releases/download/v1.3.1/SHA256SUMS.txt)** 包含两个包的校验值。下载后计算自己的安装包哈希，与文件中**同名文件**的一行比较。
+同一 [v1.3.2 Release](https://github.com/T7moris/GPT-Niang-Usage-Widget/releases/tag/v1.3.2) 的 **[SHA256SUMS.txt](https://github.com/T7moris/GPT-Niang-Usage-Widget/releases/download/v1.3.2/SHA256SUMS.txt)** 包含两个包的校验值。下载后计算自己的安装包哈希，与文件中**同名文件**的一行比较。
 
 Windows，在 PowerShell 中运行：
 
 ```powershell
-Get-FileHash .\gpt-niang-usage-widget-v1.3.1-windows.zip -Algorithm SHA256
+Get-FileHash .\gpt-niang-usage-widget-v1.3.2-windows.zip -Algorithm SHA256
 ```
 
 macOS，在终端中进入下载目录后运行：
 
 ```sh
-shasum -a 256 gpt-niang-usage-widget-v1.3.1-macos-universal.zip
+shasum -a 256 gpt-niang-usage-widget-v1.3.2-macos-universal.zip
 ```
 
 十六进制字母大小写不影响比较。哈希不一致说明下载文件与 Release 校验值不一致，可能是下载损坏或内容被改动，请不要安装。请只从本仓库的 Release 页面下载；第三方加速镜像不能当作可信来源。
@@ -117,7 +119,9 @@ shasum -a 256 gpt-niang-usage-widget-v1.3.1-macos-universal.zip
 | Mac：双击角色或从菜单栏进入设置 | 调整外观、窗口跟随和登录启动 |
 | Mac：菜单选择「退出 GPT 娘」 | 退出应用和后台 helper；需重新打开 `.app` 才会再次显示 |
 
-Windows 桌面模式：右键角色，在「外观与位置」中关闭「跟随聊天窗口」。挂件会在聊天窗口最小化或关闭后继续显示，并按默认间隔刷新额度；「桌面模式置顶」可单独开关。跟随模式为默认值，两种模式分别保存位置，原有大小、声音与语录设置保留。
+Windows 1.3.2：右键角色，进入「显示与位置」，选择「仅在 Codex 窗口内」或「整个桌面自由拖动」。桌面模式中挂件会在聊天窗口最小化或关闭后继续显示，并按默认间隔刷新额度；仅此模式显示「始终置顶」。切回窗口内立即取消桌面置顶，并隐藏该选项；桌面置顶偏好保留，默认关闭。两种模式分别保存位置，原有大小、声音与语录设置保留。「外观设置」统一调整大小与按钮显示，「声音与点击」调整音效、音量和点击行为。
+
+Windows 启动时先检查 Codex 的输入或导航控件是否可用，连续两次确认主界面就绪后才显示挂件；加载画面中的原生窗口本身不会触发显示。已启动的桌面模式继续独立显示。
 
 内置语录已同步为作者确认的 **33 句**，包括「高性能↓」「我不是吃白饭的大肥鱼」「我是啥龙？」和三句 token／储存台词。本次直接更新 1.3.1 安装包，版本号不变；重新下载时请核对最新 `SHA256SUMS.txt`。
 

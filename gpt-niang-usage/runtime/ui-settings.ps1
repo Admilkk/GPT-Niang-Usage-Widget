@@ -54,6 +54,7 @@ function Initialize-WidgetSettingsMenu {
  <Style x:Key="SettingsItem" TargetType="MenuItem">
   <Setter Property="Foreground" Value="#443552"/><Setter Property="FontSize" Value="14.5"/>
   <Setter Property="Padding" Value="10,7"/><Setter Property="Margin" Value="0,1"/><Setter Property="Cursor" Value="Hand"/>
+  <Setter Property="MinHeight" Value="36"/>
   <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="MenuItem">
    <Grid><Border x:Name="ItemBody" Background="Transparent" CornerRadius="8" Padding="{TemplateBinding Padding}">
     <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="22"/></Grid.ColumnDefinitions>
@@ -70,6 +71,7 @@ function Initialize-WidgetSettingsMenu {
    <ControlTemplate.Triggers>
     <Trigger Property="IsHighlighted" Value="True"><Setter TargetName="ItemBody" Property="Background" Value="#F0E8F8"/></Trigger>
     <Trigger Property="IsChecked" Value="True"><Setter TargetName="CheckMark" Property="Visibility" Value="Visible"/></Trigger>
+    <Trigger Property="Uid" Value="radio"><Setter TargetName="CheckMark" Property="Text" Value="●"/><Setter TargetName="CheckMark" Property="FontSize" Value="14"/></Trigger>
     <Trigger Property="HasItems" Value="True"><Setter TargetName="SubmenuArrow" Property="Visibility" Value="Visible"/></Trigger>
     <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.5"/></Trigger>
    </ControlTemplate.Triggers>
@@ -108,20 +110,24 @@ function Initialize-WidgetSettingsMenu {
   $script:context.Resources['SettingsSubmenuMaxHeight']=[double]600
   $script:settingsMenuTarget=$script:context
   $script:context.Template=[Windows.Markup.XamlReader]::Parse(@'
-<ControlTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" TargetType="ContextMenu"><Border Background="#FFFCFF" BorderBrush="#DFD1EC" BorderThickness="1" CornerRadius="14" Padding="10,9"><ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" CanContentScroll="False"><ItemsPresenter/></ScrollViewer></Border></ControlTemplate>
+<ControlTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" TargetType="ContextMenu"><Border Background="#FFFCFF" BorderBrush="#DFD1EC" BorderThickness="1" CornerRadius="12" Padding="9,8"><ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" CanContentScroll="False"><ItemsPresenter/></ScrollViewer></Border></ControlTemplate>
 '@)
-  $heading=New-Object Windows.Controls.StackPanel;$heading.Margin=[Windows.Thickness]::new(10,5,8,9)
-  $title=New-SettingsText 'GPT 娘' 18 '#604B79';$title.FontWeight=[Windows.FontWeights]::Bold
-  $hint=New-SettingsText '常用操作在前，更多设置在下方' 11.5 '#9685A8';$hint.Margin=[Windows.Thickness]::new(0,3,0,0)
-  $heading.Children.Add($title)|Out-Null;$heading.Children.Add($hint)|Out-Null;Add-SettingsPanel $heading -Passive
   $script:settingsMenuUi.Bubble=Add-SettingsAction '查看额度' {if(!$script:collapsed -and $script:bubbleMode-eq 'quota'){Hide-Quota}else{Show-Quota}} -ReturnItem
   $script:settingsMenuUi.Quote=Add-SettingsAction '换一句台词' {if($script:collapsed){Show-Quota};Switch-Scene 'quote'} -ReturnItem
   Add-SettingsAction '刷新额度' {Request-Refresh}
   Add-SettingsAction '编辑我的语录' {Open-QuoteEditor}
   Add-SettingsDivider
-  $script:settingsMenuUi.Appearance=Add-SettingsSubmenu '外观与位置' {
-  $script:settingsMenuUi.Follow=Add-SettingsAction '跟随聊天窗口' {param($sender,$event)Set-WidgetFollowHost ([bool]$sender.IsChecked)} -Description '关闭后，可在整个桌面拖动；聊天最小化也保留' -Checkable -ReturnItem
-  $script:settingsMenuUi.Topmost=Add-SettingsAction '桌面模式置顶' {param($sender,$event)$script:desktopTopmost=[bool]$sender.IsChecked;Save-Settings;Tick-Widget} -Checkable -ReturnItem
+  $script:settingsMenuUi.Display=Add-SettingsSubmenu '显示与位置' {
+  $script:settingsMenuUi.Follow=Add-SettingsAction '仅在 Codex 窗口内' {Set-WidgetFollowHost $true;Update-WidgetSettingsMenu;Set-WidgetMenuBounds;Position-WidgetMenuToHost} -Checkable -ReturnItem
+  $script:settingsMenuUi.Follow.Uid='radio'
+  $script:settingsMenuUi.Desktop=Add-SettingsAction '整个桌面自由拖动' {Set-WidgetFollowHost $false;Update-WidgetSettingsMenu;Set-WidgetMenuBounds;Position-WidgetMenuToHost} -Checkable -ReturnItem
+  $script:settingsMenuUi.Desktop.Uid='radio'
+  $script:settingsMenuUi.TopmostDivider=Add-SettingsDivider -ReturnItem
+  $script:settingsMenuUi.Topmost=Add-SettingsAction '始终置顶' {param($sender,$event)if($script:followHost){Update-WidgetSettingsMenu;return};$script:desktopTopmost=[bool]$sender.IsChecked;Save-Settings;Tick-Widget} -Checkable -ReturnItem
+  Add-SettingsDivider
+  Add-SettingsAction '恢复右下角位置' {if($script:followHost){$script:offsetRight=0;$script:offsetLeft=0;$script:offsetBottom=0;$script:anchor='right'}else{$script:desktopLeft=$null;$script:desktopTop=$null};$script:side='right';$script:lastPosition=$null;Set-Facing;Hide-Quota;Save-Settings;Tick-Widget} -StayOpen
+  } -ReturnItem
+  $script:settingsMenuUi.Appearance=Add-SettingsSubmenu '外观设置' {
   $presets=New-Object Windows.Controls.Primitives.UniformGrid;$presets.Columns=3;$presets.Margin=[Windows.Thickness]::new(0,1,0,2);$script:settingsMenuUi.SizeButtons=@()
   foreach($choice in @(@{label='小 · 80%';scale=0.8},@{label='标准 · 100%';scale=1.0},@{label='大 · 140%';scale=1.4})){
     $button=New-Object Windows.Controls.Button;$button.Content=$choice.label;$button.Tag=$choice.scale;$button.Margin=[Windows.Thickness]::new(0,0,5,0);$button.Style=$script:settingsMenuResources['SettingsPreset']
@@ -133,7 +139,6 @@ function Initialize-WidgetSettingsMenu {
   $script:sizeSlider=$size.Slider;$script:settingsMenuUi.SizeText=$size.Value;$size.Slider.Value=$script:scale
   $size.Slider.Add_ValueChanged({param($sender,$event)if($script:settingsMenuSync){return};$script:scale=[Math]::Round($sender.Value,1);$script:settingsMenuUi.SizeText.Text=([Math]::Round($script:scale*100)).ToString()+'%';Update-WidgetSizePresets;Set-Appearance;Save-Settings})
   Add-SettingsPanel $size.Panel
-  Add-SettingsAction '恢复右下角位置' {$script:offsetRight=0;$script:offsetLeft=0;$script:offsetBottom=0;$script:anchor='right';$script:side='right';if(!$script:followHost){$script:desktopLeft=$null;$script:desktopTop=$null};$script:lastPosition=$null;Set-Facing;Hide-Quota;Save-Settings}
   $script:settingsMenuUi.Hide=Add-SettingsAction '隐藏设置按钮' {param($sender,$event)$script:hideMenu=$sender.IsChecked;Set-MenuVisible $false;Save-Settings} -Description '仍可右键点角色打开设置' -Checkable -ReturnItem
   } -ReturnItem
   $script:settingsMenuUi.Colors=Add-SettingsSubmenu '配色效果' {
@@ -175,15 +180,16 @@ function Initialize-WidgetSettingsMenu {
 }
 
 function New-SettingsText([string]$Text,[double]$Size,[string]$Color){$t=New-Object Windows.Controls.TextBlock;$t.Text=$Text;$t.FontSize=$Size;$t.Foreground=[Windows.Media.BrushConverter]::new().ConvertFromString($Color);return $t}
-function Add-SettingsPanel($Panel,[switch]$Passive){
+function Add-SettingsPanel($Panel,[switch]$Passive,[switch]$ReturnItem){
   $item=New-Object Windows.Controls.MenuItem;$item.Header=$Panel;$item.StaysOpenOnClick=$true;$item.Padding=[Windows.Thickness]::new(10,0,10,0);$item.Style=$script:settingsMenuResources['SettingsItem']
-  if($Passive){$item.IsHitTestVisible=$false;$item.Focusable=$false};$script:settingsMenuTarget.Items.Add($item)|Out-Null
+  $item.MinHeight=0
+  if($Passive){$item.IsHitTestVisible=$false;$item.Focusable=$false};$script:settingsMenuTarget.Items.Add($item)|Out-Null;if($ReturnItem){return $item}
 }
-function Add-SettingsDivider{$line=New-Object Windows.Controls.Border;$line.Height=1;$line.Margin=[Windows.Thickness]::new(10,7,10,7);$line.Background=[Windows.Media.BrushConverter]::new().ConvertFromString('#EEE6F4');Add-SettingsPanel $line -Passive}
+function Add-SettingsDivider([switch]$ReturnItem){$line=New-Object Windows.Controls.Border;$line.Height=1;$line.Margin=[Windows.Thickness]::new(10,7,10,7);$line.Background=[Windows.Media.BrushConverter]::new().ConvertFromString('#EEE6F4');Add-SettingsPanel $line -Passive -ReturnItem:$ReturnItem}
 function Add-SettingsSection([string]$Label,[switch]$Divider){if($Divider){Add-SettingsDivider};$t=New-SettingsText $Label 11.5 '#A28DAF';$t.FontWeight=[Windows.FontWeights]::SemiBold;$t.Margin=[Windows.Thickness]::new(10,3,0,3);Add-SettingsPanel $t -Passive}
 function Add-SettingsAction{
   param([string]$Label,[scriptblock]$Action,[string]$Description,[switch]$Checkable,[switch]$StayOpen,[switch]$ReturnItem)
-  $item=New-Object Windows.Controls.MenuItem;$item.Style=$script:settingsMenuResources['SettingsItem'];$item.IsCheckable=[bool]$Checkable;$item.StaysOpenOnClick=[bool]$StayOpen
+  $item=New-Object Windows.Controls.MenuItem;$item.Style=$script:settingsMenuResources['SettingsItem'];$item.IsCheckable=[bool]$Checkable;$item.StaysOpenOnClick=([bool]$StayOpen -or [bool]$Checkable)
   if($Description){$p=New-Object Windows.Controls.StackPanel;$main=New-SettingsText $Label 14.5 '#443552';$detail=New-SettingsText $Description 11.5 '#A08EAD';$detail.Margin=[Windows.Thickness]::new(0,3,0,0);$p.Children.Add($main)|Out-Null;$p.Children.Add($detail)|Out-Null;$item.Header=$p}else{$item.Header=$Label}
   $item.Add_Click($Action);$script:settingsMenuTarget.Items.Add($item)|Out-Null;if($ReturnItem){return $item}
 }
@@ -209,7 +215,10 @@ function Update-WidgetSettingsMenu{
   $script:settingsMenuSync=$true
   try{
     $script:settingsMenuUi.Bubble.Header=if(!$script:collapsed -and $script:bubbleMode-eq 'quota'){'收起额度气泡'}else{'查看额度'}
-    $script:settingsMenuUi.Follow.IsChecked=$script:followHost;$script:settingsMenuUi.Topmost.IsChecked=$script:desktopTopmost;$script:settingsMenuUi.Topmost.IsEnabled=!$script:followHost
+    $script:settingsMenuUi.Follow.IsChecked=$script:followHost;$script:settingsMenuUi.Desktop.IsChecked=!$script:followHost
+    $script:settingsMenuUi.Topmost.IsChecked=$script:desktopTopmost;$script:settingsMenuUi.Topmost.IsEnabled=!$script:followHost
+    $desktopVisibility=if($script:followHost){[Windows.Visibility]::Collapsed}else{[Windows.Visibility]::Visible}
+    $script:settingsMenuUi.Topmost.Visibility=$desktopVisibility;$script:settingsMenuUi.TopmostDivider.Visibility=$desktopVisibility
     $script:settingsMenuUi.Tap.IsChecked=$script:bubbleTapAdvance;$script:settingsMenuUi.Sound.IsChecked=$script:soundOn;$script:settingsMenuUi.Hide.IsChecked=$script:hideMenu
     $script:settingsMenuUi.ColorLinked.IsChecked=$script:colorMode-eq 'linked';$script:settingsMenuUi.ColorRainbow.IsChecked=$script:colorMode-eq 'rainbow';$script:settingsMenuUi.ColorOriginal.IsChecked=$script:colorMode-eq 'original'
     $script:settingsMenuUi.ColorSurprise.IsChecked=$script:colorMode-eq 'surprise';$script:settingsMenuUi.ColorRare.IsChecked=$script:colorMode-eq 'rare';$script:settingsMenuUi.ColorSpecial.IsChecked=$script:colorMode-eq 'special'

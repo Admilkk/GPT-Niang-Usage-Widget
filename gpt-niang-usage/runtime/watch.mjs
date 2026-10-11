@@ -44,6 +44,9 @@ refresh=createRefreshQueue(async()=>{
     ipc.complete(pipeBatch,status);
     completeRequests(config.dataDir,batch,status);
     lastActivity=Date.now();
+  } catch(error) {
+    ipc.fail(pipeBatch);
+    throw error;
   } finally {activeRequestIds.clear();}
 },{onError:error=>{
   // A temporary filesystem failure must not stop the quota worker.

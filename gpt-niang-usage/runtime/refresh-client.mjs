@@ -15,7 +15,9 @@ export async function requestRefresh(config,configPath,{timeoutMs=45000,startWor
   child.on('error',()=>{});child.unref();
 },pollMs=100,restartIntervalMs=5000}={}) {
   const id=randomUUID(),at=Date.now();
-  const piped=await requestPipeRefresh(config.dataDir,{timeoutMs});
+  // Reserve time for the file queue if a connected pipe stops answering.
+  const pipeTimeoutMs=Math.min(30000,Math.floor(timeoutMs*2/3));
+  const piped=await requestPipeRefresh(config.dataDir,{timeoutMs:pipeTimeoutMs});
   if(piped)return piped;
   const requestFile=path.join(config.dataDir,'refresh-requests',id+'.json');
   const resultFile=path.join(config.dataDir,'refresh-results',id+'.json');

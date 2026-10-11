@@ -45,6 +45,9 @@ export function createPipeRefreshHandler(enqueue){
     },
     takeBatch(){const batch=[...pending];pending.clear();return batch;},
     complete(batch,snapshot){for(const [id,socket] of batch)if(!socket.destroyed)socket.end(JSON.stringify({requestId:id,snapshot})+'\n');},
+    // Release claimed clients too: they are no longer in the pending map.
+    // An empty disconnect makes the client use its filesystem fallback.
+    fail(batch){for(const [,socket] of batch)if(!socket.destroyed&&!socket.writableEnded)socket.destroy();},
     get pendingCount(){return pending.size;}
   };
 }
