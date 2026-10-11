@@ -7,8 +7,19 @@ $checks=0
 function Assert($condition,[string]$label){if(!$condition){throw ('Assertion failed: '+$label)};$script:checks++;Write-Output ('PASS '+$label)}
 function Assert-Throws([scriptblock]$action,[string]$pattern,[string]$label){try{& $action|Out-Null}catch{Assert ($_.Exception.Message-like $pattern) $label;return};throw ('Expected rejection: '+$label)}
 try{
-  $moved=Join-Path $testRoot 'moved [folder]'
+  $programRoot=Join-Path $testRoot 'program'
+  $null=New-Item -ItemType Directory -Path $programRoot
+  $moved=Join-Path $programRoot 'moved [folder]'
   Copy-Item -LiteralPath $source -Destination $moved -Recurse
+  $metadata=Join-Path $programRoot '.agents\plugins'
+  $null=New-Item -ItemType Directory -Path $metadata -Force
+  Copy-Item -LiteralPath (Join-Path (Split-Path $source -Parent) '.agents\plugins\marketplace.json') -Destination $metadata
+  # Override only the copied test runtime; never claim the real user's stable launcher.
+  $commonFile=Join-Path $moved 'runtime\update-common.ps1'
+  $common=[IO.File]::ReadAllText($commonFile)
+  $isolatedAgent=Join-Path $testRoot 'update-agent'
+  $common=$common.Replace("(Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'GPTNiangUsage\update-agent')",("'"+$isolatedAgent.Replace("'","''")+"'"))
+  [IO.File]::WriteAllText($commonFile,$common,[Text.UTF8Encoding]::new($false))
   $old=Join-Path $testRoot 'original'
   $data=Join-Path $testRoot 'state'
   $null=New-Item -ItemType Directory -Path $data
@@ -52,6 +63,11 @@ try{
   $result=(& (Join-Path $moved 'Install.ps1') -CheckOnly)|ConvertFrom-Json
   Assert ($result.ok -and $result.appDir-eq $moved) 'moved installation passes full installer CheckOnly'
   Assert ([Convert]::ToBase64String([IO.File]::ReadAllBytes($configFile))-eq $initialConfigBytes) 'CheckOnly preserves installation config'
+  try {
+    $insideAgent=Join-Path $programRoot 'update-agent'
+    [IO.File]::WriteAllText($commonFile,$common.Replace($isolatedAgent,$insideAgent),[Text.UTF8Encoding]::new($false))
+    Assert-Throws {& (Join-Path $moved 'Install.ps1') -CheckOnly} '*must be outside the program directory*' 'stable launcher cannot be included in the replaceable program tree'
+  } finally {[IO.File]::WriteAllText($commonFile,$common,[Text.UTF8Encoding]::new($false))}
   $workerFile=Join-Path $moved 'runtime\worker-state.mjs'
   $workerBytes=[IO.File]::ReadAllBytes($workerFile)
   try{

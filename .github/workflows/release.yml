@@ -13,8 +13,7 @@ on:
       - .github/workflows/release.yml
       - scripts/**
       - script/**
-      - gpt-niang-usage/package.json
-      - gpt-niang-usage/.codex-plugin/plugin.json
+      - gpt-niang-usage/**
   workflow_dispatch:
 
 permissions:

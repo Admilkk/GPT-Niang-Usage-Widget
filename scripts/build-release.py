@@ -32,12 +32,23 @@ required = {
     "gpt-niang-usage/runtime/start-widget.ps1",
     "gpt-niang-usage/runtime/refresh-client.mjs",
     "gpt-niang-usage/runtime/worker-state.mjs",
+    "gpt-niang-usage/runtime/update.mjs",
+    "gpt-niang-usage/runtime/update-helper.ps1",
+    "gpt-niang-usage/runtime/update-agent.ps1",
+    "gpt-niang-usage/runtime/update-common.ps1",
+    "gpt-niang-usage/runtime/update-lock.ps1",
+    "gpt-niang-usage/runtime/update-ui.ps1",
+    "gpt-niang-usage/runtime/install-preflight.ps1",
+    "gpt-niang-usage/runtime/install-files.json",
+    "gpt-niang-usage/runtime/agent-launch.vbs",
+    "gpt-niang-usage/runtime/agent-supervisor.vbs",
     "gpt-niang-usage/assets/gpt-dragon-niang-bust.png",
 }
 if not required.issubset(files):
     raise SystemExit("Required runtime files missing from the bundle")
 private_names = {
     "installation.json", "settings.json", "runtime.json", "presence.json", "status.json",
+    "update-preferences.json", "update-status.json", "update-transaction.json", "binding.json", "update-idle.json", "update-installing.json",
 }
 for name in files:
     path = Path(name)
