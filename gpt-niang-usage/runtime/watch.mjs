@@ -5,11 +5,15 @@ import {createRefreshQueue,mergeUsageSnapshot,readRefreshRequest} from './refres
 import {acquireWorkerLock,processAlive,readJson} from './worker-state.mjs';
 import {readPendingRequests,completeRequests,cleanRefreshResults} from './refresh-client.mjs';
 
+import {createPipeRefreshHandler} from './worker-ipc.mjs';
+
 const config=readJson(process.argv[2]);
 if(!config?.dataDir || !config?.codexPath)throw new Error('Invalid widget installation configuration');
 const parentPid=Number(process.argv[3]??0);
 if(!Number.isSafeInteger(parentPid) || parentPid<0)throw new Error('Invalid parent process id');
-const lock=await acquireWorkerLock(config.dataDir,parentPid,{onLost:()=>process.exit(1)});
+let refresh;
+const ipc=createPipeRefreshHandler(()=>{if(refresh)void refresh.request();});
+const lock=await acquireWorkerLock(config.dataDir,parentPid,{onLost:()=>process.exit(1),onConnection:ipc.onConnection});
 if(!lock)process.exit(0);
 const statusFile=path.join(config.dataDir,'status.json');
 const healthFile=path.join(config.dataDir,'worker-status.json');
@@ -27,15 +31,17 @@ process.on('exit',exit);
 process.on('SIGTERM',()=>process.exit(0));
 process.on('SIGINT',()=>process.exit(0));
 if(parentPid && !processAlive(parentPid))process.exit(0);
-const refresh=createRefreshQueue(async()=>{
+refresh=createRefreshQueue(async()=>{
   lastActivity=Date.now();
   const batch=readPendingRequests(config.dataDir);
+  const pipeBatch=ipc.takeBatch();
   for(const request of batch)activeRequestIds.add(request.id);
   try {
     const next=await readUsage(resolveCodexExecutable(config.codexPath),{onAccount:accountKey=>{
       if(status?.accountKey!==accountKey || !accountKey)save({ok:false,queryOk:false,accountKey,error:'正在读取当前账户额度…',windows:[],checkedAt:Date.now()});
     }});
     save(mergeUsageSnapshot(status,next));
+    ipc.complete(pipeBatch,status);
     completeRequests(config.dataDir,batch,status);
     lastActivity=Date.now();
   } finally {activeRequestIds.clear();}
@@ -62,7 +68,7 @@ heartbeat=setInterval(()=>{
   const pending=readPendingRequests(config.dataDir,now);
   if(requested)void refresh.request();
   else if(pending.some(request=>!activeRequestIds.has(request.id)) || (active && !refresh.busy && now-refresh.lastRefresh>=60000))void refresh.request();
-  if(!parentPid && !active && !refresh.busy && pending.length===0 && now-lastActivity>=30000)process.exit(0);
+  if(!parentPid && !active && !refresh.busy && pending.length===0 && ipc.pendingCount===0 && now-lastActivity>=30000)process.exit(0);
   cleanRefreshResults(config.dataDir,now);
   try{health();}catch{}
 },1000);

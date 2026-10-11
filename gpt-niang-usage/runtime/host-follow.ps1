@@ -65,6 +65,10 @@ public sealed class GptWidgetHostFollower : IDisposable {
   if(enabled)Synchronize();
  }
  public void Suspend(){enabled=false;}
+ public void Detach(){
+  enabled=false;ReleaseHooks();host=IntPtr.Zero;Moving=false;hiddenByHost=false;
+  clipWidth=-1;clipHeight=-1;SetWindowRgn(widget,IntPtr.Zero,true);
+ }
  void OnEvent(IntPtr hook,uint ev,IntPtr hwnd,int objectId,int childId,uint threadId,uint time){
   if(disposed||hwnd!=host||objectId!=0||childId!=0)return;
   if(ev==0x10)Moving=true;

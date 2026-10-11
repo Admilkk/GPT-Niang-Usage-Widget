@@ -20,7 +20,12 @@ export function healthyWorker(dataDir,now=Date.now()) {
   return status && owner && status.token===owner.token && status.pid===owner.pid && now-status.at>=0 && now-status.at<5000 && processAlive(status.pid) && (!status.parentPid || processAlive(status.parentPid))?status:null;
 }
 
-export async function acquireWorkerLock(dataDir,parentPid=0,{pid=process.pid,onLost=()=>{}}={}) {
+export function workerEndpoint(dataDir){
+  const key=createHash('sha256').update(path.resolve(dataDir).toLowerCase()).digest('hex').slice(0,32);
+  return process.platform==='win32'?'\\\\.\\pipe\\gpt-niang-usage-'+key:path.join(dataDir,'worker.sock');
+}
+
+export async function acquireWorkerLock(dataDir,parentPid=0,{pid=process.pid,onLost=()=>{},onConnection=socket=>socket.destroy()}={}) {
   fs.mkdirSync(dataDir,{recursive:true});
   const file=path.join(dataDir,'worker.lock');
   const owner={pid,parentPid,token:randomUUID(),startedAt:Date.now()};
@@ -48,11 +53,10 @@ export async function acquireWorkerLock(dataDir,parentPid=0,{pid=process.pid,onL
     try{atomicJson(file,owner);}catch(error){await release();throw error;}
     return {owner,release};
   }
-  const key=createHash('sha256').update(path.resolve(dataDir).toLowerCase()).digest('hex').slice(0,32);
-  const endpoint=process.platform==='win32'?'\\\\.\\pipe\\gpt-niang-usage-'+key:path.join(dataDir,'worker.sock');
+  const endpoint=workerEndpoint(dataDir);
   // Windows removes the pipe with its owning process. Stale owner files are
   // informational only, so competing restarts cannot unlink a new owner's lock.
-  const server=net.createServer(socket=>socket.destroy());
+  const server=net.createServer(onConnection);
   const claimed=await new Promise((resolve,reject)=>{
     server.once('error',error=>error.code==='EADDRINUSE'?resolve(false):reject(error));
     server.listen(endpoint,()=>resolve(true));

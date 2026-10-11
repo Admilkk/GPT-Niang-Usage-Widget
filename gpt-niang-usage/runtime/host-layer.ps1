@@ -21,6 +21,16 @@ public static class GptWidgetZOrderNative {
 '@
 }
 $script:gptZOrderBands=@{}
+function Set-WidgetDesktopLayer([IntPtr]$Widget,[bool]$Topmost=$true){
+  # A desktop pet must not be owned (and destroyed or minimized) by the chat window.
+  if([GptWidgetZOrderNative]::GetWindowLongPtr($Widget,-8)-ne [IntPtr]::Zero){
+    [GptWidgetZOrderNative]::SetWindowLongPtr($Widget,-8,[IntPtr]::Zero)|Out-Null
+  }
+  if([GptWidgetZOrderNative]::Topmost($Widget)-ne $Topmost){
+    $band=if($Topmost){[IntPtr](-1)}else{[IntPtr](-2)}
+    [GptWidgetZOrderNative]::SetWindowPos($Widget,$band,0,0,0,0,0x13)|Out-Null
+  }
+}
 function Set-WidgetAboveHost([IntPtr]$Widget,[IntPtr]$HostWindowHandle){
   if(![GptWidgetZOrderNative]::IsWindow($Widget) -or ![GptWidgetZOrderNative]::IsWindow($HostWindowHandle)){
     return [pscustomobject]@{ok=$false;changed=$false;reason='invalid-window'}

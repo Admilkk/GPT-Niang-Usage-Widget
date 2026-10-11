@@ -24,7 +24,7 @@ if(!$codex){
 }
 if(!$codex){throw 'Codex executable unavailable. Install and open the Codex desktop app first.'}
 $marketplaceRoot=Split-Path $appDir -Parent
-foreach($file in @('widget.ps1','widget.xaml','launch.vbs','supervisor.vbs','Detect-Plan.ps1','assets\gpt-dragon-niang-bust.png','assets\quotes.json','assets\quote-layouts.json','assets\press.wav','assets\release.wav','runtime\quotes.ps1','runtime\ui-settings.ps1','runtime\color-theme.ps1','runtime\quote-layout.ps1','runtime\audio.ps1','runtime\host-layer.ps1','runtime\host-follow.ps1','runtime\supervisor.ps1','runtime\supervisor-task.ps1','runtime\start-supervisor.ps1','runtime\start-widget.ps1','runtime\metadata.mjs','runtime\mcp.mjs','runtime\usage.mjs','runtime\plan.mjs','runtime\detect-plan.mjs','runtime\watch.mjs','runtime\control.mjs','runtime\refresh-queue.mjs','runtime\refresh-client.mjs','runtime\worker-state.mjs','.mcp.json','.codex-plugin\plugin.json')){
+foreach($file in @('widget.ps1','widget.xaml','launch.vbs','supervisor.vbs','Detect-Plan.ps1','assets\gpt-dragon-niang-bust.png','assets\quotes.json','assets\quote-layouts.json','assets\press.wav','assets\release.wav','runtime\quotes.ps1','runtime\ui-settings.ps1','runtime\color-theme.ps1','runtime\quote-layout.ps1','runtime\audio.ps1','runtime\host-layer.ps1','runtime\host-follow.ps1','runtime\supervisor.ps1','runtime\supervisor-task.ps1','runtime\start-supervisor.ps1','runtime\start-widget.ps1','runtime\metadata.mjs','runtime\mcp.mjs','runtime\usage.mjs','runtime\plan.mjs','runtime\detect-plan.mjs','runtime\watch.mjs','runtime\control.mjs','runtime\refresh-queue.mjs','runtime\refresh-client.mjs','runtime\worker-state.mjs','runtime\worker-ipc.mjs','.mcp.json','.codex-plugin\plugin.json')){
   if(!(Test-Path -LiteralPath (Join-Path $appDir $file))){throw "Missing file: $file"}
 }
 $startup=[Environment]::GetFolderPath('Startup')
@@ -43,6 +43,7 @@ if($CheckOnly){@{ok=$true;appDir=$appDir;codex=$codex;startupShortcut=$shortcut}
 $null=New-Item -ItemType Directory -Path $dataDir -Force
 # All plugin files are prepared locally before registration.
 Write-WidgetSupervisorJson (Join-Path $appDir 'installation.json') $config
+Write-WidgetSupervisorJson (Join-Path $appDir '.mcp.json') @{mcpServers=@{'gpt-niang-usage'=@{command=$node;args=@((Join-Path $appDir 'runtime\mcp.mjs'))}}}
 Stop-WidgetSupervisorTask -AppDir $appDir
 Stop-WidgetGui -AppDir $appDir -DataDir $dataDir
 & $codex plugin marketplace add $marketplaceRoot --json
