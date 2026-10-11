@@ -4,6 +4,7 @@ import {spawn} from 'node:child_process';
 import {randomUUID} from 'node:crypto';
 import {atomicJson} from './usage.mjs';
 import {healthyWorker,readJson} from './worker-state.mjs';
+import {requestPipeRefresh} from './worker-ipc.mjs';
 
 const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 
@@ -14,9 +15,12 @@ export async function requestRefresh(config,configPath,{timeoutMs=45000,startWor
   child.on('error',()=>{});child.unref();
 },pollMs=100,restartIntervalMs=5000}={}) {
   const id=randomUUID(),at=Date.now();
+  const piped=await requestPipeRefresh(config.dataDir,{timeoutMs});
+  if(piped)return piped;
   const requestFile=path.join(config.dataDir,'refresh-requests',id+'.json');
   const resultFile=path.join(config.dataDir,'refresh-results',id+'.json');
   try {
+    if(Date.now()-at>=timeoutMs)return {ok:false,queryOk:false,error:'额度刷新超时，请稍后重试',windows:[],clearPrevious:true};
     atomicJson(requestFile,{id,at,expiresAt:at+timeoutMs});
     let lastStart=at;
     if(!healthyWorker(config.dataDir))startWorker();

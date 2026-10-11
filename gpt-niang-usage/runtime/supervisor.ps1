@@ -47,6 +47,7 @@ public static class GptWidgetSupervisorNative {
 
 function Test-WidgetSupervisorPause($Pause,$Hosts){
   if(!$Pause){return $false}
+  if($Pause.desktop){return $true}
   foreach($item in @($Hosts)){
     if([long]$Pause.host-gt 0 -and [long]$item.handle-eq [long]$Pause.host){
       if([int]$Pause.hostPid-gt 0 -and [int]$item.pid-ne [int]$Pause.hostPid){continue}
@@ -96,6 +97,8 @@ try{
     if((Test-Path -LiteralPath (Join-Path $info.DataDir 'supervisor-disabled.flag')) -or (Test-Path -LiteralPath (Join-Path $info.DataDir 'supervisor-stop.flag'))){break}
     try{
       $hosts=@([GptWidgetSupervisorNative]::Hosts())
+      $settings=$null;try{$settings=Get-Content -LiteralPath (Join-Path $info.DataDir 'settings.json') -Raw -Encoding UTF8|ConvertFrom-Json}catch{}
+      $desktop=$settings -and $null-ne $settings.followHost -and !$settings.followHost
       $pause=$null;try{$pause=Get-Content -LiteralPath $pauseFile -Raw -Encoding UTF8|ConvertFrom-Json}catch{}
       $paused=Test-WidgetSupervisorPause $pause $hosts
       if($pause -and !$paused){Remove-Item -LiteralPath $pauseFile -ErrorAction SilentlyContinue}
@@ -106,7 +109,7 @@ try{
       # Retain the launch handle until startup finishes, so slow WPF startup
       # cannot create another GUI process before runtime.json is available.
       if($pendingGui -and ($running -or $pendingGui.HasExited)){$pendingGui.Dispose();$pendingGui=$null}
-      if(!$paused -and $visible.Count-gt 0 -and !$running -and !$pendingGui -and [DateTime]::UtcNow-ge $nextLaunch){
+      if(!$paused -and ($desktop -or $visible.Count-gt 0) -and !$running -and !$pendingGui -and [DateTime]::UtcNow-ge $nextLaunch){
         $nextLaunch=[DateTime]::UtcNow.AddSeconds(10)
         $powerShell=Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
         $pendingGui=Start-Process -FilePath $powerShell -ArgumentList @('-NoLogo','-NoProfile','-STA','-ExecutionPolicy','Bypass','-WindowStyle','Hidden','-File',('"'+(Join-Path $info.AppDir 'runtime\start-widget.ps1')+'"'),'-WidgetPath',('"'+(Join-Path $info.AppDir 'widget.ps1')+'"')) -WindowStyle Hidden -PassThru

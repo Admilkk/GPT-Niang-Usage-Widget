@@ -120,6 +120,8 @@ function Initialize-WidgetSettingsMenu {
   Add-SettingsAction '编辑我的语录' {Open-QuoteEditor}
   Add-SettingsDivider
   $script:settingsMenuUi.Appearance=Add-SettingsSubmenu '外观与位置' {
+  $script:settingsMenuUi.Follow=Add-SettingsAction '跟随聊天窗口' {param($sender,$event)Set-WidgetFollowHost ([bool]$sender.IsChecked)} -Description '关闭后，可在整个桌面拖动；聊天最小化也保留' -Checkable -ReturnItem
+  $script:settingsMenuUi.Topmost=Add-SettingsAction '桌面模式置顶' {param($sender,$event)$script:desktopTopmost=[bool]$sender.IsChecked;Save-Settings;Tick-Widget} -Checkable -ReturnItem
   $presets=New-Object Windows.Controls.Primitives.UniformGrid;$presets.Columns=3;$presets.Margin=[Windows.Thickness]::new(0,1,0,2);$script:settingsMenuUi.SizeButtons=@()
   foreach($choice in @(@{label='小 · 80%';scale=0.8},@{label='标准 · 100%';scale=1.0},@{label='大 · 140%';scale=1.4})){
     $button=New-Object Windows.Controls.Button;$button.Content=$choice.label;$button.Tag=$choice.scale;$button.Margin=[Windows.Thickness]::new(0,0,5,0);$button.Style=$script:settingsMenuResources['SettingsPreset']
@@ -131,7 +133,7 @@ function Initialize-WidgetSettingsMenu {
   $script:sizeSlider=$size.Slider;$script:settingsMenuUi.SizeText=$size.Value;$size.Slider.Value=$script:scale
   $size.Slider.Add_ValueChanged({param($sender,$event)if($script:settingsMenuSync){return};$script:scale=[Math]::Round($sender.Value,1);$script:settingsMenuUi.SizeText.Text=([Math]::Round($script:scale*100)).ToString()+'%';Update-WidgetSizePresets;Set-Appearance;Save-Settings})
   Add-SettingsPanel $size.Panel
-  Add-SettingsAction '恢复右下角位置' {$script:offsetRight=0;$script:offsetLeft=0;$script:offsetBottom=0;$script:anchor='right';$script:side='right';Set-Facing;Hide-Quota;Save-Settings}
+  Add-SettingsAction '恢复右下角位置' {$script:offsetRight=0;$script:offsetLeft=0;$script:offsetBottom=0;$script:anchor='right';$script:side='right';if(!$script:followHost){$script:desktopLeft=$null;$script:desktopTop=$null};$script:lastPosition=$null;Set-Facing;Hide-Quota;Save-Settings}
   $script:settingsMenuUi.Hide=Add-SettingsAction '隐藏设置按钮' {param($sender,$event)$script:hideMenu=$sender.IsChecked;Set-MenuVisible $false;Save-Settings} -Description '仍可右键点角色打开设置' -Checkable -ReturnItem
   } -ReturnItem
   $script:settingsMenuUi.Colors=Add-SettingsSubmenu '配色效果' {
@@ -207,6 +209,7 @@ function Update-WidgetSettingsMenu{
   $script:settingsMenuSync=$true
   try{
     $script:settingsMenuUi.Bubble.Header=if(!$script:collapsed -and $script:bubbleMode-eq 'quota'){'收起额度气泡'}else{'查看额度'}
+    $script:settingsMenuUi.Follow.IsChecked=$script:followHost;$script:settingsMenuUi.Topmost.IsChecked=$script:desktopTopmost;$script:settingsMenuUi.Topmost.IsEnabled=!$script:followHost
     $script:settingsMenuUi.Tap.IsChecked=$script:bubbleTapAdvance;$script:settingsMenuUi.Sound.IsChecked=$script:soundOn;$script:settingsMenuUi.Hide.IsChecked=$script:hideMenu
     $script:settingsMenuUi.ColorLinked.IsChecked=$script:colorMode-eq 'linked';$script:settingsMenuUi.ColorRainbow.IsChecked=$script:colorMode-eq 'rainbow';$script:settingsMenuUi.ColorOriginal.IsChecked=$script:colorMode-eq 'original'
     $script:settingsMenuUi.ColorSurprise.IsChecked=$script:colorMode-eq 'surprise';$script:settingsMenuUi.ColorRare.IsChecked=$script:colorMode-eq 'rare';$script:settingsMenuUi.ColorSpecial.IsChecked=$script:colorMode-eq 'special'
@@ -234,8 +237,8 @@ function Set-WidgetMenuBounds {
   $script:context.VerticalOffset=0
   foreach($submenu in $script:settingsSubmenus){$submenu.Tag=if($script:side-eq 'left'){[Windows.Controls.Primitives.PlacementMode]::Right}else{[Windows.Controls.Primitives.PlacementMode]::Left}}
   try{
-    if($script:hostHandle-ne [IntPtr]::Zero -and [GptWidgetNative]::IsWindow($script:hostHandle)){
-      $frame=[GptWidgetNative]::Frame($script:hostHandle);$dpi=[GptWidgetNative]::GetDpiForWindow($script:hostHandle)/96.0;if($dpi-le 0){$dpi=1}
+    if(!$script:followHost -or ($script:hostHandle-ne [IntPtr]::Zero -and [GptWidgetNative]::IsWindow($script:hostHandle))){
+      $frame=Get-WidgetPlacementFrame;$dpi=Get-WidgetPlacementDpi
       $script:context.Width=[Math]::Max(180,[Math]::Min(328,($frame.Right-$frame.Left)/$dpi-16))
       $script:context.MaxHeight=[Math]::Max(160,[Math]::Min(730,($frame.Bottom-$frame.Top)/$dpi-16))
       $script:context.Resources['SettingsSubmenuWidth']=[double][Math]::Max(180,[Math]::Min(300,($frame.Right-$frame.Left)/$dpi-16))
@@ -248,12 +251,12 @@ function Position-WidgetMenuToHost {
   # Move only our own popup; host geometry is read-only.
   if(!$script:context.IsOpen){return}
   try{
-    if($script:hostHandle-eq [IntPtr]::Zero -or ![GptWidgetNative]::IsWindow($script:hostHandle)){return}
+    if($script:followHost -and ($script:hostHandle-eq [IntPtr]::Zero -or ![GptWidgetNative]::IsWindow($script:hostHandle))){return}
     $script:context.UpdateLayout()
     $source=[Windows.Interop.HwndSource]::FromVisual($script:context)
     if(!$source -or $source.Handle-eq [IntPtr]::Zero){return}
-    $frame=[GptWidgetNative]::Frame($script:hostHandle);$menu=[GptWidgetNative]::Frame($source.Handle)
-    $dpi=[GptWidgetNative]::GetDpiForWindow($script:hostHandle)/96.0;if($dpi-le 0){$dpi=1}
+    $frame=Get-WidgetPlacementFrame;$menu=[GptWidgetNative]::Frame($source.Handle)
+    $dpi=Get-WidgetPlacementDpi
     $margin=[int][Math]::Round(8*$dpi);$width=$menu.Right-$menu.Left;$height=$menu.Bottom-$menu.Top
     $origin=$script:ui.MenuButton.PointToScreen([Windows.Point]::new(0,0))
     $edge=$script:ui.MenuButton.PointToScreen([Windows.Point]::new($script:ui.MenuButton.ActualWidth,0))
