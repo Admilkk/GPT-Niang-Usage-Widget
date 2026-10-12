@@ -1,6 +1,7 @@
 MIT License
 
-Copyright (c) 2026 Local GPT Niang Widget contributors
+Copyright (c) 2026 T7moris
+Copyright (c) 2026 GPT-Niang contributors
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -20,5 +21,6 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-This license covers the local widget source code. Character references and
-image assets retain their applicable rights.
+Scope: this MIT license applies to source code and documentation. Character
+and image assets are excluded; see CHARACTER-NOTICE.txt (under
+gpt-niang-usage/assets in the repository).

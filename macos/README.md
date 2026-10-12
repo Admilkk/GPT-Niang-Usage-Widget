@@ -1,4 +1,4 @@
-# GPT 娘 macOS
+# GPT-Niang（GPT 娘）macOS
 
 Current release: **1.3.3**. Chinese installation and platform comparison: [project README](../README.md#macos-安装).
 
@@ -136,8 +136,13 @@ snapshot of frame/visibility, gesture-event counts and quota readiness; it omits
 account details and thread titles. Do not include local state in source archives.
 Windows PowerShell/WPF tests must also run on Windows before merging.
 
-The original MIT code license and the original character asset rights notice
-continue to apply. This is an independent companion, not an official OpenAI app.
+Source code and documentation use the [MIT License](../LICENSE). Character
+images and derived icons are excluded from that license and follow the
+[character asset notice](../gpt-niang-usage/assets/CHARACTER-NOTICE.txt): project
+display in non-commercial copies is permitted within the maintainers' rights;
+commercial asset use requires separate permission from the relevant rights
+holders. The app includes both notices. This is an independent companion,
+not an official OpenAI app.
 
 ## Native updates (1.3.3+)
 

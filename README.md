@@ -1,4 +1,4 @@
-# GPT娘额度挂件
+# GPT-Niang（GPT 娘）
 
 让一只白发紫瞳的小龙娘，陪你看 Codex 的剩余额度。
 
@@ -260,4 +260,16 @@ Windows 界面使用 PowerShell / WPF，Mac 界面使用 SwiftUI / AppKit，额�
 
 交互参考 [DeepSeek-Balance-Whale-Widget](https://github.com/MeteorNOX/DeepSeek-Balance-Whale-Widget)。Windows WPF 与 Mac 原生界面分别实现，语录包含原创、用户提供及7句上游文本，来源和MIT许可见 [语录许可](gpt-niang-usage/assets/quotes-LICENSE.txt)。使用合成提示音，没有打包 DSH 原角色、动图或音效。具体对照见 [功能对照](gpt-niang-usage/DSH功能对照.md)。
 
-代码采用 [MIT License](LICENSE)。龙娘图由 ImageGen 根据用户提供的角色参考生成；参考角色及相关形象权利仍归相应权利人，代码许可不构成对第三方角色或商标的授权。详见 [素材说明](gpt-niang-usage/assets/生成说明.md)。
+## 许可与素材使用
+
+Copyright © 2026 T7moris 及项目贡献者。代码和一般文档采用 [MIT License](LICENSE)，允许使用、修改、分发和商用，分发时应保留版权声明与许可文本。
+
+| 内容 | 使用许可 |
+| --- | --- |
+| 代码与一般文档 | MIT License，可修改、分发及商用，保留版权与许可声明 |
+| 龙娘图片、派生角色图标及图片副本 | 不属于代码的 MIT 授权范围；仅允许在本项目及其非商业副本中作为挂件或项目说明展示和分发，保留素材声明；商业用途需另行取得相关权利人许可 |
+| 内置语录中的 7 句上游文本 | 按 [语录许可](gpt-niang-usage/assets/quotes-LICENSE.txt) 保留 MeteorNOX 的原始 MIT 版权与许可声明 |
+
+龙娘图由 ImageGen 根据用户提供的角色参考生成，并非本项目对参考图或参考角色的版权声明。**参考图、角色设计及相关第三方素材的权利归各自权利人所有，代码开源不代表图片或角色可以随意商用。** 未经相关权利人授权，不得将角色或图片用于商业产品、广告、周边销售、收费素材包等用途，也不得作为独立素材包分发。需要商业使用代码时，可替换为具有适当授权的图片。
+
+完整范围与使用条件见 [角色与图片素材声明](gpt-niang-usage/assets/CHARACTER-NOTICE.txt)，生成来源见 [素材说明](gpt-niang-usage/assets/生成说明.md)。
