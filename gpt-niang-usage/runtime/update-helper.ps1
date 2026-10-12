@@ -1,4 +1,4 @@
-param([string]$Token,[switch]$Recover,[switch]$FunctionsOnly)
+param([string]$Token,[switch]$Recover,[switch]$Cleanup,[switch]$FunctionsOnly)
 $ErrorActionPreference='Stop'
 . (Join-Path $PSScriptRoot 'supervisor-task.ps1')
 . (Join-Path $PSScriptRoot 'update-common.ps1')
@@ -22,7 +22,67 @@ function Assert-WidgetUpdateTransaction($Journal,[string]$AgentDir) {
 }
 function Set-WidgetUpdatePhase($Journal,[string]$Phase,[string]$AgentDir) {
   $Journal.phase=$Phase
+  if($Phase-in @('committed','rolled-back')){$Journal|Add-Member cleanupPending $true -Force}
   Write-WidgetSupervisorJson (Join-Path $AgentDir 'update-transaction.json') $Journal
+}
+function Remove-WidgetUpdateTree([string]$Directory,[string]$Parent,$Binding,[string]$AgentDir) {
+  $target=[IO.Path]::GetFullPath($Directory).TrimEnd('\')
+  Assert-WidgetUpdateChildPath $target $Parent
+  foreach($protected in @($Binding.appDir,$Binding.dataDir,$AgentDir)){
+    $full=[IO.Path]::GetFullPath($protected).TrimEnd('\')
+    if($target-ieq $full -or $full.StartsWith($target+'\',[StringComparison]::OrdinalIgnoreCase)){throw 'Cleanup would remove an active program or data directory.'}
+  }
+  Assert-WidgetNoReparsePoint $target
+  if(!(Test-Path -LiteralPath $target)){return}
+  if(!(Test-Path -LiteralPath $target -PathType Container)){throw 'Update cleanup target is not a directory.'}
+  # Inspect each directory before descending; never traverse a junction or link.
+  $directories=New-Object 'Collections.Generic.Stack[string]';$directories.Push($target)
+  while($directories.Count){
+    foreach($item in @(Get-ChildItem -LiteralPath $directories.Pop() -Force)){
+      if($item.Attributes-band [IO.FileAttributes]::ReparsePoint){throw 'Links are forbidden in update cleanup directories.'}
+      Assert-WidgetUpdateChildPath $item.FullName $target
+      if($item.PSIsContainer){$directories.Push($item.FullName)}
+    }
+  }
+  Remove-Item -LiteralPath $target -Recurse -Force -ErrorAction Stop
+}
+function Complete-WidgetUpdateCleanup($Journal,[string]$AgentDir) {
+  try {
+    $binding=Read-WidgetUpdateJson (Join-Path $AgentDir 'binding.json')
+    $null=Assert-WidgetUpdateBinding $binding.appDir $binding.dataDir $AgentDir
+    if($Journal){
+      if($Journal.phase-notin @('committed','rolled-back')){throw 'Unfinished update files must be retained for recovery.'}
+      Assert-WidgetUpdateTransaction $Journal $AgentDir
+      $Journal|Add-Member cleanupPending $true -Force
+      Write-WidgetSupervisorJson (Join-Path $AgentDir 'update-transaction.json') $Journal
+      foreach($directory in @($Journal.backup,$Journal.nextRoot,$Journal.failedRoot)){
+        Remove-WidgetUpdateTree $directory (Split-Path $Journal.root -Parent) $binding $AgentDir
+      }
+      Remove-WidgetUpdateTree (Join-Path $binding.dataDir ('updates\'+$Journal.token)) (Join-Path $binding.dataDir 'updates') $binding $AgentDir
+    }
+    $cache=Join-Path $binding.dataDir 'updates'
+    Assert-WidgetNoReparsePoint $cache
+    if(Test-Path -LiteralPath $cache){
+      foreach($directory in @(Get-ChildItem -LiteralPath $cache -Directory -Force)){
+        if($directory.Name-notmatch '^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$'){continue}
+        Assert-WidgetNoReparsePoint $directory.FullName
+        $receipt=Read-WidgetUpdateJson (Join-Path $directory.FullName 'update-job.json')
+        if(!$receipt -or $receipt.schema-ne 1 -or $receipt.token-ine $directory.Name -or $receipt.appDir-ine $binding.appDir -or $receipt.dataDir-ine $binding.dataDir){continue}
+        Remove-WidgetUpdateTree $directory.FullName $cache $binding $AgentDir
+      }
+    }
+    if($Journal){
+      $Journal.cleanupPending=$false
+      Write-WidgetSupervisorJson (Join-Path $AgentDir 'update-transaction.json') $Journal
+    }
+    $diagnostic=Join-Path $AgentDir 'update-cleanup-error.txt'
+    if(Test-Path -LiteralPath $diagnostic){Remove-Item -LiteralPath $diagnostic -ErrorAction Stop}
+    return $true
+  } catch {
+    # Cleanup never rolls a healthy installation back. Its journal remains retryable.
+    try{[IO.File]::WriteAllText((Join-Path $AgentDir 'update-cleanup-error.txt'),$_.Exception.ToString(),[Text.UTF8Encoding]::new($false))}catch{}
+    return $false
+  }
 }
 function Copy-WidgetVerifiedTree([string]$Source,[string]$Destination) {
   Assert-WidgetNoReparsePoint $Source
@@ -148,7 +208,7 @@ function Invoke-WidgetUpdateTransaction($Journal,[string]$AgentDir,[string]$Toke
     Invoke-WidgetUpdateInstaller $Journal $Token
     Wait-WidgetUpdatedHealth $Journal
     Set-WidgetUpdatePhase $Journal 'committed' $AgentDir
-    Write-WidgetSupervisorJson (Join-Path $Journal.dataDir 'update-status.json') @{phase='updated';version=$Journal.version;message=('Updated to '+$Journal.version);nextCheckAt=[DateTimeOffset]::UtcNow.AddDays(1).ToUnixTimeMilliseconds();backup=$Journal.backup}
+    Write-WidgetSupervisorJson (Join-Path $Journal.dataDir 'update-status.json') @{phase='updated';version=$Journal.version;message=('Updated to '+$Journal.version);nextCheckAt=[DateTimeOffset]::UtcNow.AddDays(1).ToUnixTimeMilliseconds()}
   } catch {
     $failure=$_.Exception.ToString()
     # Once health and registration are confirmed, a status-file write failure
@@ -166,6 +226,7 @@ function Invoke-WidgetUpdateTransaction($Journal,[string]$AgentDir,[string]$Toke
     throw $failure
   } finally {
     if(Test-Path -LiteralPath $flag){Remove-Item -LiteralPath $flag}
+    if($Journal.phase-in @('committed','rolled-back')){$null=Complete-WidgetUpdateCleanup $Journal $AgentDir}
   }
 }
 
@@ -174,7 +235,8 @@ $agentDir=$PSScriptRoot
 $lock=$null
 try {
   $journal=Read-WidgetUpdateJson (Join-Path $agentDir 'update-transaction.json')
-  if($Recover){$lock=Enter-WidgetUpdateLock -AgentDir $agentDir;$Token=$lock.Token}
+  if($Recover -or ($Cleanup -and !$Token)){$lock=Enter-WidgetUpdateLock -AgentDir $agentDir;$Token=$lock.Token}
   else {$lock=Enter-WidgetUpdateLock -AgentDir $agentDir -Token $Token}
-  Invoke-WidgetUpdateTransaction $journal $agentDir $Token -Recover:$Recover
+  if($Cleanup){if(!(Complete-WidgetUpdateCleanup $journal $agentDir)){throw 'Update cleanup is incomplete; close applications using the old files and retry.'}}
+  else {Invoke-WidgetUpdateTransaction $journal $agentDir $Token -Recover:$Recover}
 } finally {Exit-WidgetUpdateLock $lock}

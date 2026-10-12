@@ -1,5 +1,5 @@
 function Initialize-WidgetUpdater {
-  $script:updateProcess=$null;$script:updateLastTick=0;$script:updateStartedAt=[DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+  $script:updateProcess=$null;$script:updateLastTick=0;$script:updateStartedAt=[DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds();$script:updateCleanupChecked=$false
   $preferences=Read-WidgetUpdateJson (Join-Path $script:dataDir 'update-preferences.json')
   $script:autoUpdate=!($preferences -and $preferences.automatic-eq $false)
 }
@@ -56,6 +56,10 @@ function Tick-WidgetUpdater([long]$Now) {
     $script:updateProcess.Dispose();$script:updateProcess=$null
   }
   $state=Read-WidgetUpdateJson (Join-Path $script:dataDir 'update-status.json')
+  # Cleanup is independent of the preference to check for new releases.
+  if(!$script:updateCleanupChecked -and $Now-ge $script:updateStartedAt+30000 -and !$script:updateProcess){
+    $script:updateCleanupChecked=$true;Start-WidgetUpdate 'cleanup'
+  }
   if($script:autoUpdate -and $Now-ge $script:updateStartedAt+30000 -and $Now-ge [long]$state.nextCheckAt -and $state.phase-ne 'source'){Start-WidgetUpdate 'automatic'}
   if($script:context.IsOpen){Update-WidgetUpdateMenu}
 }

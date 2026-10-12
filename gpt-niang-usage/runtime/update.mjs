@@ -236,6 +236,26 @@ export function acquireUpdateLock(agentDir) {
   return updateLockHandle(dir,owner);
 }
 const updateLockHandle=(dir,owner)=>({owner,release(){if(read(path.join(dir,'owner.json'))?.token===owner.token)fs.rmSync(dir,{recursive:true});}});
+function removeDownloadedJob(config,directory,token) {
+  const parent=path.resolve(config.dataDir,'updates'),target=path.resolve(directory);
+  if(!/^[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/i.test(token) || target!==path.join(parent,token))throw new Error('Unsafe update cache cleanup path');
+  for(let current=target;;current=path.dirname(current)){
+    if(fs.existsSync(current) && fs.lstatSync(current).isSymbolicLink())throw new Error('Linked update cache cleanup path');
+    if(path.dirname(current)===current)break;
+  }
+  const inspect=directory=>{
+    for(const name of fs.readdirSync(directory)){
+      const child=path.join(directory,name),stat=fs.lstatSync(child);
+      if(stat.isSymbolicLink())throw new Error('Link in update cache');
+      if(stat.isDirectory())inspect(child);
+    }
+  };
+  if(fs.existsSync(target)){inspect(target);fs.rmSync(target,{recursive:true});}
+}
+function hasDownloadedJobs(config) {
+  const parent=path.join(config.dataDir,'updates');
+  try{return fs.readdirSync(parent).some(name=>fs.existsSync(path.join(parent,name,'update-job.json')));}catch{return false;}
+}
 export function installIdle(config,mode,now=Date.now()) {
   const idle=read(path.join(config.dataDir,'update-idle.json')),worker=read(path.join(config.dataDir,'worker-status.json'));
   return !!(idle && now-idle.at>=0 && now-idle.at<5000 && alive(idle.pid) && !idle.editor && !idle.menu && !idle.drag && !worker?.busy);
@@ -246,7 +266,10 @@ export function runUpdate(config,options={}) {
   if(jobs.has(key))return jobs.get(key);
   const job=performUpdate(config,options).finally(()=>jobs.delete(key));jobs.set(key,job);return job;
 }
-async function performUpdate(config,{mode='manual',agentDir=path.join(process.env.LOCALAPPDATA??'','GPTNiangUsage','update-agent'),fetchBytes=download,waitIdle=async()=>{
+async function performUpdate(config,{mode='manual',agentDir=path.join(process.env.LOCALAPPDATA??'','GPTNiangUsage','update-agent'),fetchBytes=download,cleanup=token=>new Promise((resolve,reject)=>{
+  const child=spawn(path.join(process.env.WINDIR,'System32','WindowsPowerShell','v1.0','powershell.exe'),['-NoProfile','-ExecutionPolicy','Bypass','-File',path.join(agentDir,'update-helper.ps1'),'-Cleanup','-Token',token],{windowsHide:true,stdio:'ignore'});
+  child.once('error',reject);child.once('exit',code=>code===0?resolve():reject(new Error('更新文件清理未完成，请关闭占用旧文件的程序后重试。')));
+}),waitIdle=async()=>{
   while(!installIdle(config,mode)) {
     if(mode.startsWith('automatic') && !updatePreferences(config.dataDir).automatic)return false;
     const idle=read(path.join(config.dataDir,'update-idle.json'));
@@ -263,12 +286,17 @@ async function performUpdate(config,{mode='manual',agentDir=path.join(process.en
   if(isGitCheckout(config.appDir)){report({phase:'source',message:'源码目录请使用 Git 更新，或另行安装 Release。'});return;}
   if(Date.now()<(state.retryAfterAt??0)){report({phase:'rate-limited',message:'GitHub 限流，请在允许重试的时间之后检查。'});return;}
   if(automatic && (!updatePreferences(config.dataDir).automatic || (mode==='automatic' && Date.now()<(state.nextCheckAt??0))))return;
-  let lock;
+  let lock,jobDir;
   try{lock=acquireUpdateLock(agentDir);}catch(error){report({phase:'failed',message:error.message,nextCheckAt:Date.now()+DAY});return;}
   if(!lock)return;
   try {
     const oldJournal=readTransaction(path.join(agentDir,'update-transaction.json'));
     if(oldJournal && !['committed','rolled-back'].includes(oldJournal.phase))throw new Error('Unfinished update requires recovery from the stable launcher');
+    if(mode==='cleanup' || oldJournal?.cleanupPending || hasDownloadedJobs(config)){
+      await cleanup(lock.owner.token);
+      if(readTransaction(path.join(agentDir,'update-transaction.json'))?.cleanupPending)throw new Error('Previous update cleanup is still pending');
+    }
+    if(mode==='cleanup')return;
     report({phase:'checking',message:'正在检查正式版…',nextCheckAt:Date.now()+DAY,retryAfterAt:0});
     const release=JSON.parse((await fetchBytes(RELEASE_API,{api:true,limit:1024*1024})).toString('utf8'));
     const selected=selectRelease(release,config.version);
@@ -279,7 +307,9 @@ async function performUpdate(config,{mode='manual',agentDir=path.join(process.en
     let lastProgress=0;
     const bytes=await fetchBytes(selected.zip.browser_download_url,{limit:MAX_ZIP,onProgress:bytes=>{if(Date.now()-lastProgress>500){lastProgress=Date.now();report({bytes});}}});
     const hash=verifyHash(bytes,sums,selected.zip),zip=inspectZip(bytes);validatePackage(zip,selected.version);
-    const jobDir=path.join(config.dataDir,'updates',lock.owner.token);fs.mkdirSync(jobDir,{recursive:true});
+    const directory=path.join(config.dataDir,'updates',lock.owner.token);
+    fs.mkdirSync(path.dirname(directory),{recursive:true});fs.mkdirSync(directory);jobDir=directory;
+    atomicJson(path.join(jobDir,'update-job.json'),{schema:1,token:lock.owner.token,appDir:config.appDir,dataDir:config.dataDir});
     const archive=path.join(jobDir,'release.zip');fs.writeFileSync(archive,bytes,{flag:'wx'});
     const candidate=extractPackage(zip,path.join(jobDir,'package'));
     report({phase:'waiting',message:'下载已校验，等待挂件空闲…'});
@@ -292,7 +322,16 @@ async function performUpdate(config,{mode='manual',agentDir=path.join(process.en
   } catch(error) {
     const finalJournal=read(path.join(agentDir,'update-transaction.json'));
     report({phase:finalJournal?.token===lock.owner.token && finalJournal.phase==='rolled-back'?'rolled-back':'failed',message:error.message,nextCheckAt:Math.max(state.nextCheckAt??0,Date.now()+(error.retryAfterMs??DAY)),retryAfterAt:error.retryAfterMs?Date.now()+error.retryAfterMs:0});
-  } finally {lock.release();}
+  } finally {
+    try {
+      if(jobDir){
+        const journal=read(path.join(agentDir,'update-transaction.json'));
+        if(!journal || journal.token!==lock.owner.token || ['committed','rolled-back'].includes(journal.phase)){
+          try{removeDownloadedJob(config,jobDir,lock.owner.token);}catch(error){report({cleanupPending:true,cleanupError:error.message});}
+        }
+      }
+    } finally {lock.release();}
+  }
 }
 
 if(process.argv[1] && path.resolve(process.argv[1])===fileURLToPath(import.meta.url)) {
@@ -304,5 +343,5 @@ if(process.argv[1] && path.resolve(process.argv[1])===fileURLToPath(import.meta.
   if(!config?.appDir || !config.dataDir || !versionParts(config.version) || path.resolve(config.appDir)!==path.dirname(path.resolve(process.argv[2])))throw new Error('Invalid updater configuration');
   const agentDir=path.join(process.env.LOCALAPPDATA,'GPTNiangUsage','update-agent'),binding=read(path.join(agentDir,'binding.json'));
   if(!binding || path.resolve(binding.appDir)!==path.resolve(config.appDir) || path.resolve(binding.dataDir)!==path.resolve(config.dataDir))throw new Error('Updater installation binding mismatch');
-  await runUpdate(config,{mode:['automatic','automatic-enabled'].includes(process.argv[3])?process.argv[3]:'manual'});
+  await runUpdate(config,{mode:['automatic','automatic-enabled','cleanup'].includes(process.argv[3])?process.argv[3]:'manual'});
 }

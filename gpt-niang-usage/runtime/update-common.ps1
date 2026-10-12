@@ -19,9 +19,10 @@ function Enter-WidgetUpdateLock {
     $owner=Read-WidgetUpdateJson (Join-Path $lockDir 'owner.json')
     if(!$owner -or $owner.token-ne $Token){throw 'Update lock token mismatch.'}
     if($owner.helperPid -and [int]$owner.helperPid-ne $PID){throw 'Update lock is owned by another helper.'}
+    $claimed=!$owner.helperPid
     $owner|Add-Member helperPid $PID -Force
     Write-WidgetSupervisorJson (Join-Path $lockDir 'owner.json') $owner
-    return [pscustomobject]@{Directory=$lockDir;Token=$Token;Owned=$false}
+    return [pscustomobject]@{Directory=$lockDir;Token=$Token;Owned=$false;HelperClaimed=$claimed}
   }
   if($OwnerPid-le 0 -or !(Get-Process -Id $OwnerPid -ErrorAction SilentlyContinue)){throw 'Update lock owner is unavailable.'}
   # Serialize stale reclamation across Node and PowerShell. A second reclaimer
@@ -48,8 +49,15 @@ function Enter-WidgetUpdateLock {
   } finally {if($held){$mutex.ReleaseMutex()};$mutex.Dispose()}
 }
 function Exit-WidgetUpdateLock($Lock) {
-  if(!$Lock -or !$Lock.Owned){return}
+  if(!$Lock){return}
   $owner=Read-WidgetUpdateJson (Join-Path $Lock.Directory 'owner.json')
+  if(!$Lock.Owned){
+    if($Lock.HelperClaimed -and $owner.token-eq $Lock.Token -and $owner.helperPid-eq $PID){
+      $owner.PSObject.Properties.Remove('helperPid')
+      Write-WidgetSupervisorJson (Join-Path $Lock.Directory 'owner.json') $owner
+    }
+    return
+  }
   if($owner.token-eq $Lock.Token){
     Assert-WidgetUpdateChildPath $Lock.Directory (Get-WidgetUpdateAgentDir)
     Remove-Item -LiteralPath $Lock.Directory -Recurse -Force

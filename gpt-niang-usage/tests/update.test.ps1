@@ -32,6 +32,11 @@ function Assert-WidgetPluginRegistration([string]$Codex,[string]$Version){
 function Get-CimInstance {
   return [pscustomobject]@{Name='powershell.exe';CommandLine=('powershell.exe -File "'+(Join-Path $script:agent 'update-agent.ps1')+'"')}
 }
+$script:healthValidator=(Get-Command Wait-WidgetUpdatedHealth).ScriptBlock
+function Wait-WidgetUpdatedHealth($Journal) {
+  if($script:failureMode-eq 'health'){throw 'Simulated new supervisor health failure.'}
+  & $script:healthValidator $Journal
+}
 function Invoke-WidgetUpdateInstaller($Journal,[string]$Token) {
   $script:installerCalls++
   $manifest=Read-WidgetUpdateJson (Join-Path $Journal.appDir '.codex-plugin\plugin.json')
@@ -76,13 +81,15 @@ try {
   Invoke-WidgetUpdateTransaction $journal $script:agent $journal.token
   Assert ($journal.phase-eq 'committed') 'upgrade commits after registration and real heartbeat validation'
   Assert ((Read-WidgetUpdateJson (Join-Path $journal.appDir 'installation.json')).version-eq '1.3.3') 'new plugin version registered'
-  Assert (Test-Path -LiteralPath $journal.backup) 'complete previous program remains available'
+  Assert (!(Test-Path -LiteralPath $journal.backup) -and !$journal.cleanupPending) 'confirmed upgrade removes the complete previous program backup'
+  Assert (!(Test-Path -LiteralPath (Split-Path $journal.archive -Parent))) 'confirmed upgrade removes the archive and extracted cache'
   Assert ((Read-WidgetUpdateJson (Join-Path $journal.dataDir 'settings.json')).scale-eq 1.4) 'position and appearance preferences preserved'
   Assert (!(Read-WidgetUpdateJson (Join-Path $journal.dataDir 'update-preferences.json')).automatic) 'disabled automatic-update preference preserved'
 
   $journal=New-Fixture 'committed-status';$script:failureMode='status'
   Invoke-WidgetUpdateTransaction $journal $script:agent $journal.token
   Assert ($journal.phase-eq 'committed' -and $script:installerCalls-eq 1) 'status write failure after commit does not roll back a healthy upgrade'
+  Assert (!(Test-Path -LiteralPath $journal.backup)) 'committed status failure does not skip automatic cleanup'
 
   $journal=New-Fixture 'embedded-data' -Embedded
   Invoke-WidgetUpdateTransaction $journal $script:agent $journal.token
@@ -100,7 +107,11 @@ try {
   $journal=New-Fixture 'failed-install';$script:failureMode='install'
   Assert-Throws {Invoke-WidgetUpdateTransaction $journal $script:agent $journal.token} 'installation failure triggers rollback'
   Assert ($journal.phase-eq 'rolled-back' -and (Read-WidgetUpdateJson (Join-Path $journal.appDir 'installation.json')).version-eq '1.3.2') 'failed new registration restores and registers old plugin'
-  Assert (Test-Path -LiteralPath $journal.failedRoot) 'failed replacement is retained for diagnosis'
+  Assert (!(Test-Path -LiteralPath $journal.failedRoot) -and !(Test-Path -LiteralPath (Split-Path $journal.archive -Parent))) 'successful rollback cleans failed replacement and download cache'
+
+  $journal=New-Fixture 'failed-health';$script:failureMode='health'
+  Assert-Throws {Invoke-WidgetUpdateTransaction $journal $script:agent $journal.token} 'backup is retained until the new supervisor passes health validation'
+  Assert ($journal.phase-eq 'rolled-back' -and (Read-WidgetUpdateJson (Join-Path $journal.appDir 'installation.json')).version-eq '1.3.2') 'failed health validation restores the original version before cleanup'
 
   $journal=New-Fixture 'interrupted-rename'
   Assert-WidgetUpdateTransaction $journal $script:agent
@@ -128,10 +139,52 @@ try {
   Remove-Item -LiteralPath (Join-Path $journal.appDir 'installation.json')
   Assert-Throws {Invoke-WidgetUpdateTransaction $journal $script:agent $journal.token -Recover} 'missing old configuration stops recovery'
   Assert ($journal.phase-eq 'recovery-failed' -and (Test-Path -LiteralPath (Join-Path $script:agent 'update-diagnostic.txt'))) 'failed recovery keeps diagnosis and blocks automatic retry'
+  Assert (Test-Path -LiteralPath (Split-Path $journal.archive -Parent)) 'failed recovery preserves the downloaded recovery files'
   Assert-Throws {Restore-WidgetUpdate $journal $script:agent $journal.token} 'failed recovery cannot be automatically repeated'
+
+  $journal=New-Fixture 'cleanup-locked'
+  $journal.phase='committed';Assert-WidgetUpdateTransaction $journal $script:agent
+  Copy-WidgetVerifiedTree $journal.root $journal.backup
+  $held=Join-Path $journal.backup 'held.txt';[IO.File]::WriteAllText($held,'locked backup')
+  $stream=[IO.File]::Open($held,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::None)
+  try{
+    Assert (!(Complete-WidgetUpdateCleanup $journal $script:agent) -and $journal.cleanupPending) 'occupied backup keeps a pending cleanup record'
+    Assert ($journal.phase-eq 'committed' -and (Test-Path -LiteralPath $journal.appDir)) 'cleanup failure never rolls back a committed program'
+  }finally{$stream.Dispose()}
+  Assert (Complete-WidgetUpdateCleanup $journal $script:agent) 'pending cleanup can be retried after the file is released'
+  Assert (!(Test-Path -LiteralPath $journal.backup) -and !$journal.cleanupPending) 'cleanup retry removes the backup and clears its pending record'
+
+  $journal=New-Fixture 'cache-ownership'
+  $journal.phase='rolled-back'
+  $ownedToken=[Guid]::NewGuid().ToString('D');$owned=Join-Path $journal.dataDir ('updates\'+$ownedToken)
+  Write-WidgetSupervisorJson (Join-Path $owned 'update-job.json') @{schema=1;token=$ownedToken;appDir=$journal.appDir;dataDir=$journal.dataDir}
+  [IO.File]::WriteAllText((Join-Path $owned 'release.zip'),'orphaned download')
+  $foreignToken=[Guid]::NewGuid().ToString('D');$foreign=Join-Path $journal.dataDir ('updates\'+$foreignToken)
+  Write-WidgetSupervisorJson (Join-Path $foreign 'update-job.json') @{schema=1;token=$foreignToken;appDir='C:\another-app';dataDir=$journal.dataDir}
+  Assert (Complete-WidgetUpdateCleanup $journal $script:agent) 'terminal cleanup also reclaims owned interrupted download caches'
+  Assert (!(Test-Path -LiteralPath $owned) -and (Test-Path -LiteralPath $foreign)) 'foreign cache directories are preserved'
+  Assert ([IO.File]::ReadAllText((Join-Path $journal.dataDir 'quotes.txt'))-eq 'custom quote') 'cache cleanup preserves custom quote data'
+
+  $journal=New-Fixture 'cleanup-links';$journal.phase='committed';Assert-WidgetUpdateTransaction $journal $script:agent
+  $outside=Join-Path $testRoot 'unrelated';$null=New-Item -ItemType Directory -Path $outside
+  [IO.File]::WriteAllText((Join-Path $outside 'keep.txt'),'unrelated')
+  $null=New-Item -ItemType Junction -Path $journal.backup -Target $outside
+  try{
+    Assert (!(Complete-WidgetUpdateCleanup $journal $script:agent)) 'linked backup cleanup is rejected'
+    Assert ([IO.File]::ReadAllText((Join-Path $outside 'keep.txt'))-eq 'unrelated') 'cleanup never traverses a link into unrelated files'
+  }finally{[IO.Directory]::Delete($journal.backup)}
 
   $lock=Enter-WidgetUpdateLock -AgentDir $script:agent
   try{Assert-Throws {Enter-WidgetUpdateLock -AgentDir $script:agent} 'installer/update/uninstall lock is exclusive'}finally{Exit-WidgetUpdateLock $lock}
+  $lock=Enter-WidgetUpdateLock -AgentDir $script:agent
+  try{
+    $helper=Enter-WidgetUpdateLock -AgentDir $script:agent -Token $lock.Token
+    $nested=Enter-WidgetUpdateLock -AgentDir $script:agent -Token $lock.Token
+    Exit-WidgetUpdateLock $nested
+    Assert ((Read-WidgetUpdateJson (Join-Path $lock.Directory 'owner.json')).helperPid-eq $PID) 'nested installer does not release its parent helper claim'
+    Exit-WidgetUpdateLock $helper
+    Assert (!(Read-WidgetUpdateJson (Join-Path $lock.Directory 'owner.json')).helperPid) 'cleanup helper returns its claim before the install helper starts'
+  }finally{Exit-WidgetUpdateLock $lock}
   $script:dataDir=Join-Path $testRoot 'ui-preferences';$null=New-Item -ItemType Directory -Path $script:dataDir
   $script:settingsMenuUi=@{}
   Initialize-WidgetUpdater;Assert $script:autoUpdate 'WPF automatic-update default is on'
@@ -143,6 +196,11 @@ try {
   Tick-WidgetUpdater $now
   $failed=Read-WidgetUpdateJson (Join-Path $script:dataDir 'update-status.json')
   Assert ($failed.phase-eq 'failed' -and $failed.nextCheckAt-ge $now+86400000 -and $script:disposedUpdater -and !$script:updateProcess) 'unexpected updater exit reports failure, releases its handle and delays background retries'
+  $script:startedModes=New-Object 'Collections.Generic.List[string]'
+  function Start-WidgetUpdate([string]$Mode){$script:startedModes.Add($Mode)}
+  $script:updateStartedAt=$now-30000;$script:updateLastTick=0
+  Tick-WidgetUpdater $now
+  Assert ($script:startedModes.Count-eq 1 -and $script:startedModes[0]-eq 'cleanup') 'startup retries cleanup even when automatic updates are disabled'
   Write-Output ("All $checks isolated Windows updater assertions passed.")
 } finally {
   Assert-WidgetUpdateChildPath $testRoot ([IO.Path]::GetTempPath())

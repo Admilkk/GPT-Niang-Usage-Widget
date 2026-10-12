@@ -3,11 +3,11 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import {createHash} from 'node:crypto';
+import {createHash,randomUUID} from 'node:crypto';
 import {EventEmitter} from 'node:events';
 import {Readable} from 'node:stream';
 import {deflateRawSync} from 'node:zlib';
-import {spawn} from 'node:child_process';
+import {spawn,spawnSync} from 'node:child_process';
 import {compareVersions,versionParts,selectRelease,verifyHash,inspectZip,validatePackage,extractPackage,validateExtractedPackage,safeZipName,allowedUrl,download,runUpdate,acquireUpdateLock,updatePreferences,checkDue,installIdle,DAY,RELEASE_API} from '../runtime/update.mjs';
 import {requestRefresh} from '../runtime/refresh-client.mjs';
 
@@ -115,6 +115,43 @@ test('automatic disabled makes no request; enabling checks immediately; source c
 test('a disabled toggle before installation cancels automatic work',async t=>{
   const {config,options}=setup(t);options.waitIdle=async()=>{fs.writeFileSync(path.join(config.dataDir,'update-preferences.json'),'{"automatic":false}');return true;};
   await runUpdate(config,{...options,mode:'automatic'});assert.equal(options.installs,0);
+  assert.deepEqual(fs.readdirSync(path.join(config.dataDir,'updates')),[]);
+});
+test('cancelled idle wait removes its download without touching user preferences',async t=>{
+  const {config,options}=setup(t);options.waitIdle=async()=>false;
+  const preferences=path.join(config.dataDir,'settings.json');fs.writeFileSync(preferences,'{"scale":1.4}');
+  await runUpdate(config,{...options,mode:'automatic'});
+  assert.equal(options.installs,0);assert.deepEqual(fs.readdirSync(path.join(config.dataDir,'updates')),[]);
+  assert.equal(fs.readFileSync(preferences,'utf8'),'{"scale":1.4}');
+});
+test('pending cleanup failure blocks a new download and preserves its transaction',async t=>{
+  const {config,options}=setup(t);fs.mkdirSync(options.agentDir,{recursive:true});
+  const journal=path.join(options.agentDir,'update-transaction.json'),record=JSON.stringify({phase:'committed',cleanupPending:true,token:'old'});
+  fs.writeFileSync(journal,record);let attempts=0;
+  options.cleanup=async()=>{attempts++;throw new Error('Backup is occupied');};
+  options.fetchBytes=async()=>assert.fail('Do not accumulate another version before cleanup');
+  await runUpdate(config,options);
+  assert.equal(attempts,1);assert.equal(fs.readFileSync(journal,'utf8'),record);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(config.dataDir,'update-status.json'))).phase,'failed');
+});
+test('real cleanup helper reclaims an interrupted cache and releases its claim before installation',{skip:process.platform!=='win32'},async t=>{
+  const {config,options}=setup(t),token=randomUUID(),job=path.join(config.dataDir,'updates',token);
+  fs.mkdirSync(job,{recursive:true});fs.mkdirSync(options.agentDir,{recursive:true});
+  fs.writeFileSync(path.join(job,'update-job.json'),JSON.stringify({schema:1,token,appDir:config.appDir,dataDir:config.dataDir}));
+  fs.writeFileSync(path.join(job,'release.zip'),'interrupted');
+  for(const name of ['update-helper.ps1','update-common.ps1','supervisor-task.ps1','install-preflight.ps1']){
+    fs.copyFileSync(new URL('../runtime/'+name,import.meta.url),path.join(options.agentDir,name));
+  }
+  const executable=path.join(process.env.WINDIR,'System32','WindowsPowerShell','v1.0','powershell.exe');
+  const identity=spawnSync(executable,['-NoProfile','-Command','[Security.Principal.WindowsIdentity]::GetCurrent().User.Value'],{windowsHide:true,encoding:'utf8',timeout:15000});
+  assert.equal(identity.status,0,identity.stderr);
+  fs.writeFileSync(path.join(options.agentDir,'binding.json'),JSON.stringify({sid:identity.stdout.trim(),appDir:config.appDir,dataDir:config.dataDir}));
+  options.launch=async()=>{
+    assert.equal(fs.existsSync(job),false);
+    assert.equal(JSON.parse(fs.readFileSync(path.join(options.agentDir,'update.lock','owner.json'))).helperPid,undefined);
+    options.installs++;
+  };
+  await runUpdate(config,options);assert.equal(options.installs,1);
 });
 test('idle installation rejects drag, menus, editors, busy workers and expired signals',t=>{
   const {config}=setup(t),now=Date.now(),file=path.join(config.dataDir,'update-idle.json');
