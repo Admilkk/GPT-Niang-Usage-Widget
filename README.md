@@ -2,11 +2,11 @@
 
 让一只白发紫瞳的小龙娘，陪你看 Codex 的剩余额度。
 
-**Windows / macOS 桌面挂件 · 自动识别套餐与额度窗口 · 中文语录 · 当前正式版 1.3.2**
+**Windows / macOS 桌面挂件 · 自动识别套餐与额度窗口 · 中文语录 · 当前正式版 1.3.3**
 
-Windows 1.3.2 新增独立桌面模式、统一菜单与启动等待；macOS 保留原有界面，共享额度后端同步更新。两个平台使用同一版本号分别提供安装包。
+1.3.3 新增双平台内置更新与历史版本自动清理。Windows 使用现有 WPF 设置菜单，macOS 使用 SwiftUI／AppKit 原生更新界面和独立原生助手；两个平台分别提供安装包。
 
-[**下载最新版**](https://github.com/T7moris/GPT-Niang-Usage-Widget/releases/latest) · [Windows 安装](#windows-安装) · [macOS 安装](#macos-安装) · [更新记录](更新记录.md) · [反馈问题](https://github.com/T7moris/GPT-Niang-Usage-Widget/issues/new)
+[**下载最新版**](https://github.com/T7moris/GPT-Niang/releases/latest) · [Windows 安装](#windows-安装) · [macOS 安装](#macos-安装) · [更新记录](更新记录.md) · [反馈问题](https://github.com/T7moris/GPT-Niang/issues/new)
 
 <img src="gpt-niang-usage/assets/gpt-dragon-niang-bust.png" alt="无嘴巴的白发龙娘半身形象" width="240">
 
@@ -40,18 +40,18 @@ node /Applications/GPTNiangMac.app/Contents/Resources/Backend/runtime/detect-pla
 
 脚本通过同一套只读 `account/read` 与 `account/rateLimits/read` 自动读取套餐标识，优先使用额度桶中的 `planType`，未提供时使用账号返回的套餐；不读取或输出令牌、邮箱和聊天。切换套餐后下一次刷新会重新识别，套餐变化会使旧快照失效。API Key 登录、未登录、接口查询失败和成功但没有额度窗口会分别提示，成功但没有窗口不被当成网络错误。
 
-[PR #8](https://github.com/T7moris/GPT-Niang-Usage-Widget/pull/8) 的 Go 实测表明原接口已经成功返回 30 天窗口，原后端的 `[300,10080]` 白名单和 Windows 固定按分钟数查找两行才是显示失败的原因。切换套餐可能改变 `planType`、窗口时长、窗口数量和重置时刻；额度读取方法仍是同一个。实际 HTTP／登录错误应根据返回错误单独检查，不能仅凭套餐名称判断。协议字段见 [OpenAI App Server 文档](https://learn.chatgpt.com/docs/app-server)。
+[PR #8](https://github.com/T7moris/GPT-Niang/pull/8) 的 Go 实测表明原接口已经成功返回 30 天窗口，原后端的 `[300,10080]` 白名单和 Windows 固定按分钟数查找两行才是显示失败的原因。切换套餐可能改变 `planType`、窗口时长、窗口数量和重置时刻；额度读取方法仍是同一个。实际 HTTP／登录错误应根据返回错误单独检查，不能仅凭套餐名称判断。协议字段见 [OpenAI App Server 文档](https://learn.chatgpt.com/docs/app-server)。
 
 ## 安装
 
 两边都需要 **Node.js 20 或更新版本**，以及已安装并用 ChatGPT 账号登录的 **Codex 桌面端**。下载包不附带 Node.js；缺少时请先从 [Node.js 官方网站](https://nodejs.org/) 安装。
 
-在 [Release 下载页](https://github.com/T7moris/GPT-Niang-Usage-Widget/releases/latest) 的 **Assets** 中选择自己的系统：
+在 [Release 下载页](https://github.com/T7moris/GPT-Niang/releases/latest) 的 **Assets** 中选择自己的系统：
 
-| 系统 | v1.3.2 安装包 | 安装入口 |
+| 系统 | v1.3.3 安装包 | 安装入口 |
 | --- | --- | --- |
-| Windows 10 / 11 | [gpt-niang-usage-widget-v1.3.2-windows.zip](https://github.com/T7moris/GPT-Niang-Usage-Widget/releases/download/v1.3.2/gpt-niang-usage-widget-v1.3.2-windows.zip) | 解压后运行 `安装GPT娘.cmd` |
-| macOS 13+，Apple Silicon / Intel | [gpt-niang-usage-widget-v1.3.2-macos-universal.zip](https://github.com/T7moris/GPT-Niang-Usage-Widget/releases/download/v1.3.2/gpt-niang-usage-widget-v1.3.2-macos-universal.zip) | 解压后打开 `GPTNiangMac.app` |
+| Windows 10 / 11 | [gpt-niang-usage-widget-v1.3.3-windows.zip](https://github.com/T7moris/GPT-Niang/releases/download/v1.3.3/gpt-niang-usage-widget-v1.3.3-windows.zip) | 解压后运行 `安装GPT娘.cmd` |
+| macOS 13+，Apple Silicon / Intel | [gpt-niang-usage-widget-v1.3.3-macos-universal.zip](https://github.com/T7moris/GPT-Niang/releases/download/v1.3.3/gpt-niang-usage-widget-v1.3.3-macos-universal.zip) | 解压后打开 `GPTNiangMac.app` |
 
 GitHub 自动附带的 **Source code** 和 **Code → Download ZIP** 是源码，不是上述安装包。Mac 下载包内已包含通用应用，不需要 Swift 或 Xcode；Intel 和较旧 macOS 的实际界面表现仍需真机验证。尚无 Linux 版本。
 
@@ -76,18 +76,18 @@ Mac 的位置跟随目标为 60 Hz，仍使用轮询，不能保证拖动时零�
 
 ### 安装包校验（建议）
 
-同一 [v1.3.2 Release](https://github.com/T7moris/GPT-Niang-Usage-Widget/releases/tag/v1.3.2) 的 **[SHA256SUMS.txt](https://github.com/T7moris/GPT-Niang-Usage-Widget/releases/download/v1.3.2/SHA256SUMS.txt)** 包含两个包的校验值。下载后计算自己的安装包哈希，与文件中**同名文件**的一行比较。
+同一 [v1.3.3 Release](https://github.com/T7moris/GPT-Niang/releases/tag/v1.3.3) 的 **[SHA256SUMS.txt](https://github.com/T7moris/GPT-Niang/releases/download/v1.3.3/SHA256SUMS.txt)** 包含两个包的校验值。下载后计算自己的安装包哈希，与文件中**同名文件**的一行比较。
 
 Windows，在 PowerShell 中运行：
 
 ```powershell
-Get-FileHash .\gpt-niang-usage-widget-v1.3.2-windows.zip -Algorithm SHA256
+Get-FileHash .\gpt-niang-usage-widget-v1.3.3-windows.zip -Algorithm SHA256
 ```
 
 macOS，在终端中进入下载目录后运行：
 
 ```sh
-shasum -a 256 gpt-niang-usage-widget-v1.3.2-macos-universal.zip
+shasum -a 256 gpt-niang-usage-widget-v1.3.3-macos-universal.zip
 ```
 
 十六进制字母大小写不影响比较。哈希不一致说明下载文件与 Release 校验值不一致，可能是下载损坏或内容被改动，请不要安装。请只从本仓库的 Release 页面下载；第三方加速镜像不能当作可信来源。
@@ -98,11 +98,11 @@ shasum -a 256 gpt-niang-usage-widget-v1.3.2-macos-universal.zip
 
 **Windows：**
 
-> 从 https://github.com/T7moris/GPT-Niang-Usage-Widget/releases/latest 下载 Windows 安装包与 SHA256SUMS.txt，先核对来源和哈希，再完整解压到长期保留的位置（例如 `%LOCALAPPDATA%\Programs\GPTNiangUsage`），运行 `安装GPT娘.cmd` 并告诉我结果。先检查 Node.js 20+ 和 Codex 的 ChatGPT 登录状态。
+> 从 https://github.com/T7moris/GPT-Niang/releases/latest 下载 Windows 安装包与 SHA256SUMS.txt，先核对来源和哈希，再完整解压到长期保留的位置（例如 `%LOCALAPPDATA%\Programs\GPTNiangUsage`），运行 `安装GPT娘.cmd` 并告诉我结果。先检查 Node.js 20+ 和 Codex 的 ChatGPT 登录状态。
 
 **macOS：**
 
-> 从 https://github.com/T7moris/GPT-Niang-Usage-Widget/releases/latest 下载 macOS 通用安装包与 SHA256SUMS.txt，先核对来源和哈希，再解压并将 `GPTNiangMac.app` 放入「应用程序」。检查 Node.js 20+ 和 Codex 的 ChatGPT 登录状态，打开应用并告诉我结果。若系统要求首次打开确认，请告诉我具体提示，由我在系统设置中确认。
+> 从 https://github.com/T7moris/GPT-Niang/releases/latest 下载 macOS 通用安装包与 SHA256SUMS.txt，先核对来源和哈希，再解压并将 `GPTNiangMac.app` 放入「应用程序」。检查 Node.js 20+ 和 Codex 的 ChatGPT 登录状态，打开应用并告诉我结果。若系统要求首次打开确认，请告诉我具体提示，由我在系统设置中确认。
 
 ## 使用
 
@@ -119,7 +119,7 @@ shasum -a 256 gpt-niang-usage-widget-v1.3.2-macos-universal.zip
 | Mac：双击角色或从菜单栏进入设置 | 调整外观、窗口跟随和登录启动 |
 | Mac：菜单选择「退出 GPT 娘」 | 退出应用和后台 helper；需重新打开 `.app` 才会再次显示 |
 
-Windows 1.3.2：右键角色，进入「显示与位置」，选择「仅在 Codex 窗口内」或「整个桌面自由拖动」。桌面模式中挂件会在聊天窗口最小化或关闭后继续显示，并按默认间隔刷新额度；仅此模式显示「始终置顶」。切回窗口内立即取消桌面置顶，并隐藏该选项；桌面置顶偏好保留，默认关闭。两种模式分别保存位置，原有大小、声音与语录设置保留。「外观设置」统一调整大小与按钮显示，「声音与点击」调整音效、音量和点击行为。
+Windows 1.3.3：右键角色，进入「显示与位置」，选择「仅在 Codex 窗口内」或「整个桌面自由拖动」。桌面模式中挂件会在聊天窗口最小化或关闭后继续显示，并按默认间隔刷新额度；仅此模式显示「始终置顶」。切回窗口内立即取消桌面置顶，并隐藏该选项；桌面置顶偏好保留，默认关闭。两种模式分别保存位置，原有大小、声音与语录设置保留。「外观设置」统一调整大小与按钮显示，「声音与点击」调整音效、音量和点击行为。
 
 Windows 启动时先检查 Codex 的输入或导航控件是否可用，连续两次确认主界面就绪后才显示挂件；加载画面中的原生窗口本身不会触发显示。已启动的桌面模式继续独立显示。
 
@@ -157,7 +157,7 @@ Windows 启动时先检查 Codex 的输入或导航控件是否可用，连续�
 
 更新保留安装路径、位置、缩放、声音、自定义语录及自动更新开关。下载后校验 SHA256 和包结构；哈希验证不能防止发布者账号被攻破，也不等同源码安全审查。更新不读取 GitHub/OpenAI 登录凭据，不支持镜像或自定义下载源。
 
-安装期间额度查询会提示稍后重试。安装失败会恢复旧程序，重启时会先处理未完成的更新。新版注册与后台心跳确认成功，或旧版回滚成功后，自动清理对应的旧版备份、失败版本、临时目录与下载缓存；取消下载后的安装也会清理缓存。文件被占用导致清理失败时，下次启动会重试，即使已关闭自动更新也会执行清理；清理完成前不继续下载新版本，避免历史文件累积。清理只处理本次更新记录及带有当前安装归属记录的缓存，不删除用户偏好或其他目录。
+安装期间额度查询会提示稍后重试。安装失败会恢复旧程序，重启时会先处理未完成的更新。新版注册与后台心跳确认成功，或旧版回滚成功后，自动清理对应的旧版备份、失败版本、临时目录与下载缓存；取消下载后的安装也会清理缓存。文件被占用导致清理失败时，下次启动会重试，即使已关闭自动更新也会执行清理；清理完成前不继续下载新版本，避免历史文件累积。清理只处理本次更新记录及带有当前安装归属记录的缓存，不删除用户偏好。安装目录旁的个人截图、手动下载包和其他非程序文件会在替换前校验并保留；同名冲突会在关闭挂件前取消更新。
 
 若恢复失败，恢复所需文件继续保留，请保留上一版备份和 `%LOCALAPPDATA%\GPTNiangUsage\update-agent` 中的 `update-diagnostic.txt`，修复占用或权限问题后再处理，程序不会继续自动重试。清理失败的原因记录在同目录的 `update-cleanup-error.txt`。
 
@@ -175,7 +175,13 @@ Windows 启动时先检查 Codex 的输入或导航控件是否可用，连续�
 
 ### macOS
 
-更新时先退出 GPT 娘，再用新版本替换原位置的 `.app`；偏好和自定义语录保留在用户数据目录中。
+1.3.3 起，在原生设置的「版本与更新」中检查更新、查看版本或关闭自动更新；菜单栏也提供「检查更新」。启动 30 秒后自动检查，此后每 24 小时一次，默认开启。仅安装官方 Release 的更高正式版。
+
+下载与 SHA256、包结构、应用签名和双架构校验通过后，等待拖动、刷新、菜单和设置／聊天速度窗口结束，再由独立 Swift 助手替换原位置的 `.app`。新版窗口与额度后台完成启动确认后，自动清理上一版与下载缓存；失败时先退出新版、恢复并重开旧版。恢复未完成时保留恢复文件，诊断位于数据目录的 `mac-update-diagnostic.txt`。关闭自动更新仍会在下次启动重试已经完成的更新清理。
+
+偏好、自定义语录和额度数据保留在 `.app` 外的用户数据目录中。更新不调用 Windows PowerShell 更新器，也不要求安装 Swift／Xcode。请将应用放到当前用户可写的应用程序目录，先退出应用再移动；源码目录使用 Git 更新。
+
+1.3.2 及更早版本尚无内置更新，需要先退出 GPT 娘，再手动替换原位置的 `.app`，首次升级到 1.3.3 后即可使用内置更新。本版仍为 ad-hoc 签名、尚未 Apple 公证，签名完整性检查不等同 Developer ID 身份验证；系统要求打开确认时需由用户按系统提示操作。
 
 移动应用前先关闭登录启动，退出应用，移到新位置后重新打开，需要时再开启登录启动。
 
@@ -238,13 +244,19 @@ Windows 界面使用 PowerShell / WPF，Mac 界面使用 SwiftUI / AppKit，额�
 
 ## 反馈与参与
 
-遇到问题可以 [提交中文问题反馈](https://github.com/T7moris/GPT-Niang-Usage-Widget/issues/new)。请说明操作系统、CPU 架构（Mac）、Codex 与挂件版本、复现步骤以及期望效果；截图请裁去对话、账号和其他私人信息。不要上传登录文件或整个状态目录。
+遇到问题可以 [提交中文问题反馈](https://github.com/T7moris/GPT-Niang/issues/new)。请说明操作系统、CPU 架构（Mac）、Codex 与挂件版本、复现步骤以及期望效果；截图请裁去对话、账号和其他私人信息。不要上传登录文件或整个状态目录。
 
 欢迎改进窗口兼容性、安装流程和可读性；改动后请运行相应平台的检查。角色为静态半身配合按压动画，不包含完整桌宠动作。
 
 ## 致谢与许可
 
-感谢 @meaqua9420 贡献 macOS 原生版本（PR #3）、@TheRuabit 修复 Windows 安装器 UTF-8 解码（PR #4）、@Admilkk 改进额度显示与后台可靠性（PR #1），以及 [@FusaishiHaruaki-afk](https://github.com/FusaishiHaruaki-afk) 提供 Go 账号实测、30 天额度适配、按窗口时长显示的改进方案和 Mac 构建兼容修复（[PR #8](https://github.com/T7moris/GPT-Niang-Usage-Widget/pull/8)、[PR #9](https://github.com/T7moris/GPT-Niang-Usage-Widget/pull/9)）。
+按已采纳贡献的覆盖范围、实现规模和对使用体验的影响排序，感谢：
+
+1. [@Admilkk](https://github.com/Admilkk)：额度展示、账号隔离、进程恢复与后台可靠性（[PR #1](https://github.com/T7moris/GPT-Niang/pull/1)），以及 Windows 内置更新和事务恢复的基础实现（[PR #16](https://github.com/T7moris/GPT-Niang/pull/16)，整合于 [PR #17](https://github.com/T7moris/GPT-Niang/pull/17)）。
+2. [@meaqua9420](https://github.com/meaqua9420)：SwiftUI／AppKit 原生 macOS 版本、窗口跟随与聊天速度面板（[PR #3](https://github.com/T7moris/GPT-Niang/pull/3)）。
+3. [@wzc20090621-gif](https://github.com/wzc20090621-gif)：Windows 独立桌面模式、本机额度通信与 MCP 安装路径修复（[PR #15](https://github.com/T7moris/GPT-Niang/pull/15)）。
+4. [@FusaishiHaruaki-afk](https://github.com/FusaishiHaruaki-afk)：Go 账号实测、30 天额度适配、按窗口自身时长显示及 Mac 构建兼容（[PR #8](https://github.com/T7moris/GPT-Niang/pull/8)、[PR #9](https://github.com/T7moris/GPT-Niang/pull/9)）。
+5. [@TheRuabit](https://github.com/TheRuabit)：Windows 安装器 UTF-8 解码修复（[PR #4](https://github.com/T7moris/GPT-Niang/pull/4)）。
 
 交互参考 [DeepSeek-Balance-Whale-Widget](https://github.com/MeteorNOX/DeepSeek-Balance-Whale-Widget)。Windows WPF 与 Mac 原生界面分别实现，语录包含原创、用户提供及7句上游文本，来源和MIT许可见 [语录许可](gpt-niang-usage/assets/quotes-LICENSE.txt)。使用合成提示音，没有打包 DSH 原角色、动图或音效。具体对照见 [功能对照](gpt-niang-usage/DSH功能对照.md)。
 

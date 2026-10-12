@@ -32,6 +32,7 @@ final class WidgetModel: ObservableObject {
     let characterImage: NSImage?
     let defaults: UserDefaults
     private var worker: Process?
+    var workerRunning: Bool { worker?.isRunning == true }
     private var stderr: FileHandle?
     private var timer: Timer?
     private var quotes: [Quote] = []

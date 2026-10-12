@@ -53,6 +53,9 @@ function New-Fixture([string]$Name,[switch]$Embedded) {
   $case=Join-Path $testRoot $Name;$root=Join-Path $case 'install';$app=Join-Path $root 'gpt-niang-usage'
   $null=New-Item -ItemType Directory -Path $root -Force
   Copy-Item -LiteralPath $source -Destination $app -Recurse
+  foreach($name in @('package.json','.codex-plugin\plugin.json')){
+    $file=Join-Path $app $name;$value=Read-WidgetUpdateJson $file;$value.version='1.3.2';Write-WidgetSupervisorJson $file $value
+  }
   $metadata=Join-Path $root '.agents\plugins';$null=New-Item -ItemType Directory -Path $metadata -Force
   Copy-Item -LiteralPath (Join-Path (Split-Path $source -Parent) '.agents\plugins\marketplace.json') -Destination $metadata
   $data=if($Embedded){Join-Path $root 'state'}else{Join-Path $case 'state'}
@@ -78,6 +81,9 @@ try {
   $hashFile=Join-Path $testRoot 'sha-test.txt';[IO.File]::WriteAllText($hashFile,'abc')
   Assert ((Get-WidgetFileHash $hashFile)-eq 'BA7816BF8F01CFEA414140DE5DAE2223B00361A396177A9CB410FF61F20015AD') 'SHA256 works without Get-FileHash module autoload'
   $journal=New-Fixture 'upgrade'
+  [IO.File]::WriteAllText((Join-Path $journal.root 'screenshot.png'),'personal screenshot')
+  $personal=Join-Path $journal.root 'my downloads';$null=New-Item -ItemType Directory -Path $personal
+  [IO.File]::WriteAllText((Join-Path $personal 'old-package.zip'),'manually downloaded archive')
   Invoke-WidgetUpdateTransaction $journal $script:agent $journal.token
   Assert ($journal.phase-eq 'committed') 'upgrade commits after registration and real heartbeat validation'
   Assert ((Read-WidgetUpdateJson (Join-Path $journal.appDir 'installation.json')).version-eq '1.3.3') 'new plugin version registered'
@@ -85,6 +91,14 @@ try {
   Assert (!(Test-Path -LiteralPath (Split-Path $journal.archive -Parent))) 'confirmed upgrade removes the archive and extracted cache'
   Assert ((Read-WidgetUpdateJson (Join-Path $journal.dataDir 'settings.json')).scale-eq 1.4) 'position and appearance preferences preserved'
   Assert (!(Read-WidgetUpdateJson (Join-Path $journal.dataDir 'update-preferences.json')).automatic) 'disabled automatic-update preference preserved'
+  Assert ([IO.File]::ReadAllText((Join-Path $journal.root 'screenshot.png'))-eq 'personal screenshot') 'unrelated screenshots remain at their original active path'
+  Assert ([IO.File]::ReadAllText((Join-Path $journal.root 'my downloads\old-package.zip'))-eq 'manually downloaded archive') 'unmanaged download folders survive old-version cleanup'
+
+  $journal=New-Fixture 'personal-collision'
+  [IO.File]::WriteAllText((Join-Path $journal.root 'user.txt'),'personal file')
+  [IO.File]::WriteAllText((Join-Path $journal.candidate 'user.txt'),'unexpected package file')
+  Assert-Throws {Invoke-WidgetUpdateTransaction $journal $script:agent $journal.token} 'personal file collision blocks replacement'
+  Assert ($script:stops-eq 0 -and [IO.File]::ReadAllText((Join-Path $journal.root 'user.txt'))-eq 'personal file') 'personal collision is rejected before shutdown and preserves the original'
 
   $journal=New-Fixture 'committed-status';$script:failureMode='status'
   Invoke-WidgetUpdateTransaction $journal $script:agent $journal.token

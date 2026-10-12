@@ -17,8 +17,10 @@ struct GPTNiangEntry {
 }
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelegate {
     private var model: WidgetModel!
+    private var updater: NativeUpdater!
+    private var trackingMenus = 0
     private var panel: NSPanel!
     private var settingsWindow: NSWindow?
     private var speedWindow: NSWindow?
@@ -52,9 +54,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             // Reopening the app must not create a second character or quota worker.
             NSApp.terminate(nil); return
         }
+        if Bundle.main.bundleURL.pathExtension == "app" {
+            do {
+                if try NativeUpdater.recoverBeforeLaunch(data: dataDirectory) { NSApp.terminate(nil); return }
+            } catch { logger.error("Update recovery: \(error.localizedDescription, privacy: .public)") }
+        }
         guard let resources = Bundle.main.resourceURL else { NSApp.terminate(nil); return }
         diagnosticsURL = argument("--diagnostics").map { URL(fileURLWithPath: $0) }
         model = WidgetModel(dataDirectory: dataDirectory, resources: resources)
+        updater = NativeUpdater(data: dataDirectory, idle: { [weak self] in
+            guard let self else { return false }
+            return self.dragOrigin == nil && self.trackingMenus == 0 && self.settingsWindow?.isVisible != true &&
+                self.speedWindow?.isVisible != true && !self.model.refreshing
+        }, terminate: { NSApp.terminate(nil) })
         panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 378, height: 378),
                         styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         panel.title = "GPT 娘額度掛件"
@@ -73,13 +85,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         RunLoop.main.add(followTimer, forMode: .common)
         timer = followTimer
         if args.contains("--speed") { showSpeed() }
+        updater.start()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            if self?.model.workerRunning == true { NativeUpdater.confirmLaunch(data: dataDirectory) }
+        }
         logger.info("macOS widget launched")
     }
     func applicationWillTerminate(_ notification: Notification) {
-        timer?.invalidate(); model?.stop(); speedStore.stop()
+        timer?.invalidate(); updater?.stop(); model?.stop(); speedStore.stop()
         if lockDescriptor >= 0 { Darwin.close(lockDescriptor) }
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
+    func menuWillOpen(_ menu: NSMenu) { trackingMenus += 1 }
+    func menuDidClose(_ menu: NSMenu) { trackingMenus = max(0, trackingMenus - 1) }
     func windowWillClose(_ notification: Notification) {
         if let window = notification.object as? NSWindow {
             if window === speedWindow { speedStore.stop() }
@@ -89,17 +107,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private func buildMenu() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem?.button?.image = NSImage(systemSymbolName: "sparkles", accessibilityDescription: "GPT 娘")
-        let menu = NSMenu()
+        let menu = NSMenu(); menu.delegate = self
         for (title, selector) in [("GPT 娘 · Codex 額度", #selector(showQuota)), ("刷新額度", #selector(refresh)), ("來一句語錄", #selector(quote)), ("聊天速度…", #selector(showSpeed))] {
             let item = NSMenuItem(title: title, action: selector, keyEquivalent: ""); item.target = self; menu.addItem(item)
         }
         menu.addItem(.separator())
         let settings = NSMenuItem(title: "設定…", action: #selector(showSettings), keyEquivalent: ","); settings.target = self; menu.addItem(settings)
+        let update = NSMenuItem(title: "檢查更新…", action: #selector(checkUpdate), keyEquivalent: ""); update.target = self; menu.addItem(update)
         let quit = NSMenuItem(title: "退出 GPT 娘", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"); menu.addItem(quit)
         statusItem?.menu = menu
         let main = NSMenu()
         let appMenu = NSMenuItem()
-        let applicationMenu = NSMenu(title: "GPT 娘")
+        let applicationMenu = NSMenu(title: "GPT 娘"); applicationMenu.delegate = self
         for item in menu.items {
             if item.isSeparatorItem { applicationMenu.addItem(.separator()); continue }
             let copy = NSMenuItem(title: item.title, action: item.action, keyEquivalent: item.keyEquivalent)
@@ -116,11 +135,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     @objc private func showQuota() { model.showQuota(); updateWindow() }
     @objc private func refresh() { model.refresh() }
     @objc private func quote() { model.showQuote() }
+    @objc private func checkUpdate() { showSettings(); updater.check(manual: true) }
     @objc private func showSettings() {
         if settingsWindow == nil {
             let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 500, height: 620), styleMask: [.titled, .closable, .miniaturizable], backing: .buffered, defer: false)
             window.title = "GPT 娘設定"; window.isReleasedWhenClosed = false; window.delegate = self
-            window.contentView = NSHostingView(rootView: SettingsView(model: model))
+            window.contentView = NSHostingView(rootView: SettingsView(model: model, updater: updater))
             window.center(); settingsWindow = window
         }
         NSApp.setActivationPolicy(.regular); NSApp.activate(ignoringOtherApps: true)

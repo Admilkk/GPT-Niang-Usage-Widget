@@ -13,6 +13,7 @@ on:
       - .github/workflows/release.yml
       - scripts/**
       - script/**
+      - macos/**
       - gpt-niang-usage/**
   workflow_dispatch:
 
@@ -76,6 +77,8 @@ jobs:
           set -euo pipefail
           version="$(node -p "require('./gpt-niang-usage/package.json').version")"
           lipo dist/GPTNiangMac.app/Contents/MacOS/GPTNiangMac -verify_arch arm64 x86_64
+          lipo dist/GPTNiangMac.app/Contents/Helpers/GPTNiangUpdater -verify_arch arm64 x86_64
+          dist/GPTNiangMac.app/Contents/Helpers/GPTNiangUpdater --validate-bundle dist/GPTNiangMac.app "$version" --universal
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' dist/GPTNiangMac.app/Contents/Info.plist)" = "$version"
           codesign --verify --deep --strict dist/GPTNiangMac.app
           archive="dist/gpt-niang-usage-widget-v$version-macos-universal.zip"
@@ -84,6 +87,7 @@ jobs:
           ditto -x -k "$archive" "$RUNNER_TEMP/mac-release-check"
           codesign --verify --deep --strict "$RUNNER_TEMP/mac-release-check/GPTNiangMac.app"
           lipo "$RUNNER_TEMP/mac-release-check/GPTNiangMac.app/Contents/MacOS/GPTNiangMac" -verify_arch arm64 x86_64
+          "$RUNNER_TEMP/mac-release-check/GPTNiangMac.app/Contents/Helpers/GPTNiangUpdater" --validate-bundle "$RUNNER_TEMP/mac-release-check/GPTNiangMac.app" "$version" --universal
       - uses: actions/upload-artifact@v4
         with:
           name: release-macos

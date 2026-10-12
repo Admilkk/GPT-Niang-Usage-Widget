@@ -100,6 +100,25 @@ function Copy-WidgetVerifiedTree([string]$Source,[string]$Destination) {
     }
   }
 }
+function Copy-WidgetUnmanagedRootItems($Journal,[switch]$EmbeddedData) {
+  # Legacy installs often share their outer folder with screenshots and downloads.
+  $managed=@('.agents','gpt-niang-usage','.gitignore','LICENSE','README.md','更新记录.md','SHA256SUMS.txt',
+    '安装GPT娘.cmd','打开GPT娘.cmd','停用GPT娘.cmd','检测套餐.cmd')
+  foreach($item in @(Get-ChildItem -LiteralPath $Journal.root -Force)){
+    if($item.Name-in $managed){continue}
+    $containsData=$Journal.dataDir-ieq $item.FullName -or $Journal.dataDir.StartsWith($item.FullName+'\',[StringComparison]::OrdinalIgnoreCase)
+    $target=Join-Path $Journal.nextRoot $item.Name
+    Assert-WidgetUpdateChildPath $target $Journal.nextRoot
+    if(Test-Path -LiteralPath $target){throw ('Candidate overlaps a personal file or directory: '+$item.Name)}
+    if($containsData -ne [bool]$EmbeddedData){continue}
+    Assert-WidgetNoReparsePoint $item.FullName
+    if($item.PSIsContainer){Copy-WidgetVerifiedTree $item.FullName $target}
+    else {
+      Copy-Item -LiteralPath $item.FullName -Destination $target
+      if((Get-WidgetFileHash $item.FullName)-ne (Get-WidgetFileHash $target)){throw 'Personal file copy verification failed.'}
+    }
+  }
+}
 function Wait-WidgetUpdateIdle($Journal) {
   while($true){
     $idle=Read-WidgetUpdateJson (Join-Path $Journal.dataDir 'update-idle.json')
@@ -178,6 +197,7 @@ function Invoke-WidgetUpdateTransaction($Journal,[string]$AgentDir,[string]$Toke
     Assert-WidgetCandidatePackage $Journal $config
     if(Test-Path -LiteralPath $Journal.nextRoot){throw 'Update staging directory already exists.'}
     Copy-WidgetVerifiedTree $Journal.candidate $Journal.nextRoot
+    Copy-WidgetUnmanagedRootItems $Journal
     # Use the validated existing installation configuration, not a downloaded path.
     Copy-Item -LiteralPath (Join-Path $Journal.appDir 'installation.json') -Destination (Join-Path $Journal.nextRoot 'gpt-niang-usage\installation.json')
     Wait-WidgetUpdateIdle $Journal
@@ -195,7 +215,7 @@ function Invoke-WidgetUpdateTransaction($Journal,[string]$AgentDir,[string]$Toke
     if($Journal.dataDir.StartsWith($Journal.root+'\',[StringComparison]::OrdinalIgnoreCase)) {
       $relative=$Journal.dataDir.Substring($Journal.root.Length+1)
       if($relative-ieq 'gpt-niang-usage' -or $relative.StartsWith('gpt-niang-usage\runtime\',[StringComparison]::OrdinalIgnoreCase)){throw 'Data directory overlaps program files.'}
-      Copy-WidgetVerifiedTree $Journal.dataDir (Join-Path $Journal.nextRoot $relative)
+      Copy-WidgetUnmanagedRootItems $Journal -EmbeddedData
     }
     if(Test-Path -LiteralPath $Journal.backup){throw 'Old-version backup already exists.'}
     # Persist intent before each rename; recovery uses actual directory presence.
