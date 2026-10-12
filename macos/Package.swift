@@ -4,10 +4,14 @@ import PackageDescription
 let package = Package(
     name: "GPTNiangMac",
     platforms: [.macOS(.v13)],
-    products: [.executable(name: "GPTNiangMac", targets: ["GPTNiangMac"])],
+    products: [.executable(name: "GPTNiangMac", targets: ["GPTNiangMac"]),
+               .executable(name: "GPTNiangUpdater", targets: ["GPTNiangUpdater"])],
     targets: [
         .target(name: "GPTNiangCore"),
-        .executableTarget(name: "GPTNiangMac", dependencies: ["GPTNiangCore"]),
+        .target(name: "GPTNiangUpdate"),
+        .executableTarget(name: "GPTNiangMac", dependencies: ["GPTNiangCore", "GPTNiangUpdate"]),
+        .executableTarget(name: "GPTNiangUpdater", dependencies: ["GPTNiangUpdate"]),
+        .testTarget(name: "GPTNiangUpdateTests", dependencies: ["GPTNiangUpdate"]),
         .testTarget(name: "GPTNiangCoreTests", dependencies: ["GPTNiangCore"]),
         .testTarget(name: "GPTNiangMacTests", dependencies: ["GPTNiangMac"])
     ]

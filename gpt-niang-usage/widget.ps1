@@ -7,12 +7,14 @@ $script:config=Get-Content -LiteralPath $script:configPath -Raw -Encoding UTF8 |
 $script:dataDir=$script:config.dataDir
 $null=New-Item -ItemType Directory -Path $script:dataDir -Force
 . (Join-Path $script:appDir 'runtime\quotes.ps1')
-. (Join-Path $script:appDir 'runtime\ui-settings.ps1')
+. ([ScriptBlock]::Create([IO.File]::ReadAllText((Join-Path $script:appDir 'runtime\ui-settings.ps1'),[Text.Encoding]::UTF8)))
 . (Join-Path $script:appDir 'runtime\audio.ps1')
 . (Join-Path $script:appDir 'runtime\host-layer.ps1')
 . (Join-Path $script:appDir 'runtime\host-follow.ps1')
 . (Join-Path $script:appDir 'runtime\host-ready.ps1')
 . (Join-Path $script:appDir 'runtime\supervisor-task.ps1')
+. (Join-Path $script:appDir 'runtime\update-common.ps1')
+. ([ScriptBlock]::Create([IO.File]::ReadAllText((Join-Path $script:appDir 'runtime\update-ui.ps1'),[Text.Encoding]::UTF8)))
 . ([ScriptBlock]::Create([IO.File]::ReadAllText((Join-Path $script:appDir 'runtime\color-theme.ps1'),[Text.Encoding]::UTF8)))
 . ([ScriptBlock]::Create([IO.File]::ReadAllText((Join-Path $script:appDir 'runtime\quote-layout.ps1'),[Text.Encoding]::UTF8)))
 Initialize-WidgetQuoteLayouts $script:appDir
@@ -513,6 +515,7 @@ $script:messageHook=[Windows.Interop.HwndSourceHook]{param($hwnd,$msg,$w,$l,[ref
   if($msg-eq 0x21){$handled.Value=$true;return [IntPtr]3};return [IntPtr]::Zero
 }
 $source.AddHook($script:messageHook)
+Initialize-WidgetUpdater
 Initialize-WidgetSettingsMenu
 $script:ui.Refresh.Add_Click({param($sender,$event)Request-Refresh;Restart-SceneTtl;$script:ui.Status.Text='正在刷新额度…';$event.Handled=$true})
 $script:ui.MenuButton.Add_Click({Open-WidgetMenu})
@@ -571,6 +574,14 @@ $script:ui.Girl.Add_LostMouseCapture({
   if($script:drag){$script:drag=$null;Animate-Press $false;Stop-WidgetAudio;Save-Settings;$script:hostEventTimer.Start()}
 })
 function Ensure-QuotaWorker([long]$now){
+  $updateFlag=Join-Path $script:dataDir 'update-installing.json'
+  if(Test-Path -LiteralPath $updateFlag){
+    $update=Read-WidgetUpdateJson $updateFlag
+    $installer=if($update.pid){Get-Process -Id ([int]$update.pid) -ErrorAction SilentlyContinue}else{$null}
+    try{if($installer -and (!$update.startedAt -or $installer.StartTime.ToUniversalTime()-eq ([DateTime]$update.startedAt).ToUniversalTime())){return}}
+    finally{if($installer){$installer.Dispose()}}
+    Remove-Item -LiteralPath $updateFlag
+  }
   if($now-$script:lastWorkerProbe-lt 5000){return}
   $script:lastWorkerProbe=$now
   $healthy=$false
@@ -620,6 +631,7 @@ function Tick-Widget {
   try{
   $now=[DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
   Tick-Scene $now
+  Tick-WidgetUpdater $now
   if($now-$script:lastPresence-ge 1000 -and (Test-Path -LiteralPath (Join-Path $script:dataDir 'stop.flag'))){$script:window.Close();return}
   Ensure-QuotaWorker $now
   $foreground=[GptWidgetNative]::GetAncestor([GptWidgetNative]::GetForegroundWindow(),2)

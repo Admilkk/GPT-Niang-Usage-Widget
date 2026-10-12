@@ -15,6 +15,7 @@ changelog = (root / '更新记录.md').read_text(encoding='utf-8-sig')
 if changelog.split('## ', 1)[1].splitlines()[0] != version:
     raise SystemExit('First changelog entry must match the release version')
 changes = changelog.split(f'## {version}\n', 1)[1].split('\n## ', 1)[0].strip()
+credits = (root / 'README.md').read_text(encoding='utf-8-sig').split('## 致谢与许可\n\n', 1)[1].split('\n\n交互参考', 1)[0]
 dist = root / 'dist'
 windows = f'gpt-niang-usage-widget-v{version}-windows.zip'
 macos = f'gpt-niang-usage-widget-v{version}-macos-universal.zip'
@@ -33,7 +34,7 @@ for name in [windows, macos]:
             info = plistlib.loads(archive.read('GPTNiangMac.app/Contents/Info.plist'))
             if info['CFBundleShortVersionString'] != version or info['CFBundleVersion'] != version:
                 raise SystemExit('Mac archive version differs')
-            required = ['Contents/MacOS/GPTNiangMac', 'Contents/Resources/Backend/runtime/refresh-client.mjs',
+            required = ['Contents/MacOS/GPTNiangMac', 'Contents/Helpers/GPTNiangUpdater', 'Contents/Resources/Backend/runtime/refresh-client.mjs',
                         'Contents/Resources/Backend/runtime/thread-speed.mjs', 'Contents/Resources/gpt-dragon-niang-bust.png']
             if any('GPTNiangMac.app/' + entry not in archive.namelist() for entry in required):
                 raise SystemExit('Mac archive is missing runtime resources')
@@ -68,7 +69,9 @@ Mac 应用仅 ad-hoc 签名，未使用 Developer ID、未经过 Apple 公证。
 
 `SHA256SUMS.txt` 同时包含两个安装包的校验值；GitHub 自动附带的 Source code 是源码，不是安装包。
 
-感谢 @meaqua9420（PR #3，macOS 原生版本）、@TheRuabit（PR #4，UTF-8 安装修复）、@Admilkk（PR #1，额度与后台可靠性），以及 [@FusaishiHaruaki-afk](https://github.com/FusaishiHaruaki-afk)（PR #8 / #9，Go 实测、按窗口时长适配及 Mac 构建兼容）。感谢 @wzc20090621-gif（PR #15，Windows 桌面模式、本机额度通信及 MCP 路径修复）。窗口跟随优化见 PR #5。
+### 致谢
+
+{credits}
 '''
 (dist / 'release-notes.md').write_text(notes, encoding='utf-8')
 print(f'Validated both platform archives for v{version}')

@@ -3,12 +3,13 @@ import path from 'node:path';
 import {readUsage,atomicJson,resolveCodexExecutable} from './usage.mjs';
 import {createRefreshQueue,mergeUsageSnapshot,readRefreshRequest} from './refresh-queue.mjs';
 import {acquireWorkerLock,processAlive,readJson} from './worker-state.mjs';
-import {readPendingRequests,completeRequests,cleanRefreshResults} from './refresh-client.mjs';
+import {readPendingRequests,completeRequests,cleanRefreshResults,widgetUpdating,updatingSnapshot} from './refresh-client.mjs';
 
 import {createPipeRefreshHandler} from './worker-ipc.mjs';
 
 const config=readJson(process.argv[2]);
 if(!config?.dataDir || !config?.codexPath)throw new Error('Invalid widget installation configuration');
+if(widgetUpdating(config.dataDir))process.exit(0);
 const parentPid=Number(process.argv[3]??0);
 if(!Number.isSafeInteger(parentPid) || parentPid<0)throw new Error('Invalid parent process id');
 let refresh;
@@ -35,6 +36,7 @@ refresh=createRefreshQueue(async()=>{
   lastActivity=Date.now();
   const batch=readPendingRequests(config.dataDir);
   const pipeBatch=ipc.takeBatch();
+  if(widgetUpdating(config.dataDir)){ipc.complete(pipeBatch,updatingSnapshot());completeRequests(config.dataDir,batch,updatingSnapshot());return;}
   for(const request of batch)activeRequestIds.add(request.id);
   try {
     const next=await readUsage(resolveCodexExecutable(config.codexPath),{onAccount:accountKey=>{
@@ -59,6 +61,7 @@ save({ok:false,queryOk:false,error:'正在读取当前账户额度…',windows:[
 health();
 if(parentPid)void refresh.request();
 heartbeat=setInterval(()=>{
+  if(widgetUpdating(config.dataDir)){completeRequests(config.dataDir,readPendingRequests(config.dataDir),updatingSnapshot());ipc.complete(ipc.takeBatch(),updatingSnapshot());process.exit(0);}
   const stop=readRefreshRequest(path.join(config.dataDir,'stop.flag'));
   if((parentPid && (!processAlive(parentPid) || stop!==null)) || (stop!==null && stop!==initialStop))process.exit(0);
   // No background queries while Codex is not visible; a fresh query on return.

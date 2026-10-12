@@ -4,6 +4,7 @@ import GPTNiangCore
 
 struct SettingsView: View {
     @ObservedObject var model: WidgetModel
+    @ObservedObject var updater: NativeUpdater
     @State private var loginError: String?
 
     var body: some View {
@@ -14,6 +15,20 @@ struct SettingsView: View {
                 Spacer()
             }
             Text("讓小龍娘陪你掌握 Codex 額度。").foregroundStyle(.secondary)
+            GroupBox("版本與更新") {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        Text("目前版本 \(updater.currentVersion)")
+                        Spacer()
+                        if updater.busy { ProgressView().controlSize(.small) }
+                        Button("檢查更新") { updater.check(manual: true) }.disabled(updater.busy)
+                    }
+                    Toggle("自動檢查並安裝正式版", isOn: $updater.automatic)
+                    Text(updater.status).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    Text("下載後關閉此視窗，掛件空閒時才會替換應用。確認新版啟動後清理上一版與下載缓存；偏好和語錄保留。")
+                        .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }.padding(10)
+            }
             GroupBox("外觀與顯示") {
                 VStack(alignment: .leading, spacing: 14) {
                     HStack { Text("角色大小").frame(width: 70, alignment: .leading); Slider(value: $model.scale, in: 0.6...1.5); Text("\(Int(model.scale * 100))% ").monospacedDigit().frame(width: 48) }
