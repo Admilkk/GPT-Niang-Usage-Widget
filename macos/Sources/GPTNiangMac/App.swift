@@ -65,7 +65,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         updater = NativeUpdater(data: dataDirectory, idle: { [weak self] in
             guard let self else { return false }
             return self.dragOrigin == nil && self.trackingMenus == 0 && self.settingsWindow?.isVisible != true &&
-                self.speedWindow?.isVisible != true && !self.model.refreshing
+                self.speedWindow?.isVisible != true && self.model.updateIdle
         }, terminate: { NSApp.terminate(nil) })
         panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 378, height: 378),
                         styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)

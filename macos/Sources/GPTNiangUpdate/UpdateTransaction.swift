@@ -2,15 +2,25 @@ import Foundation
 import Darwin
 
 public enum UpdateFiles {
-    public static func canonical(_ url: URL) -> URL { url.standardizedFileURL.resolvingSymlinksInPath() }
+    public static func canonical(_ url: URL) -> URL {
+        if let resolved = realpath(url.path, nil) {
+            defer { free(resolved) }
+            return URL(fileURLWithPath: String(cString: resolved), isDirectory: url.hasDirectoryPath)
+        }
+        let parent = url.deletingLastPathComponent()
+        guard parent.path != url.path else { return url }
+        return canonical(parent).appendingPathComponent(url.lastPathComponent, isDirectory: url.hasDirectoryPath)
+    }
     public static func inside(_ child: URL, _ parent: URL) -> Bool { child.standardizedFileURL.path.hasPrefix(parent.standardizedFileURL.path + "/") }
     public static func checkPath(_ url: URL) throws {
-        var current = url.standardizedFileURL
-        while current.path != "/" {
-            if FileManager.default.fileExists(atPath: current.path), try current.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink == true {
-                throw UpdateFailure("更新路徑不能包含目錄連結。")
+        var current = url.path
+        while current != "/" {
+            var info = stat()
+            if lstat(current, &info) == 0, info.st_mode & S_IFMT == S_IFLNK {
+                throw UpdateFailure("更新路徑不能包含目錄連結：" + current)
             }
-            current.deleteLastPathComponent()
+            let parent = (current as NSString).deletingLastPathComponent
+            if parent == current || parent.isEmpty { break }; current = parent
         }
     }
     public static func checkTree(_ root: URL) throws {

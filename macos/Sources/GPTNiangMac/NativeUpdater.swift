@@ -103,10 +103,14 @@ final class NativeUpdater: ObservableObject {
                 let sums = try await NativeDownload.bytes(from: selected.checksums.browser_download_url, limit: 1024 * 1024)
                 try UpdatePolicy.verify(sums, asset: selected.checksums)
                 let archive = try await NativeDownload.bytes(from: selected.archive.browser_download_url, limit: UpdatePolicy.maximumArchive)
-                let digest = try UpdatePolicy.verifyArchive(archive, checksums: sums, asset: selected.archive)
-                let file = active.cache(id).appendingPathComponent("release.zip"); try archive.write(to: file, options: .atomic)
-                let candidate = try NativeArchive.extract(file, to: active.cache(id).appendingPathComponent("package", isDirectory: true))
-                try NativeArchive.validate(candidate, version: selected.version)
+                let prepared = try await Task.detached {
+                    let digest = try UpdatePolicy.verifyArchive(archive, checksums: sums, asset: selected.archive)
+                    let file = active.cache(id).appendingPathComponent("release.zip"); try archive.write(to: file, options: .atomic)
+                    let candidate = try NativeArchive.extract(file, to: active.cache(id).appendingPathComponent("package", isDirectory: true))
+                    try NativeArchive.validate(candidate, version: selected.version)
+                    return (candidate, digest)
+                }.value
+                try Task.checkCancellation()
                 status = "下載已驗證，請關閉設定視窗，等待掛件空閒後安裝。"
                 while !idle() {
                     if !manual && !automatic { status = "自動更新已關閉，下載已清理。"; return }
@@ -114,9 +118,12 @@ final class NativeUpdater: ObservableObject {
                 }
                 if !manual && !automatic { status = "自動更新已關閉，下載已清理。"; return }
                 try active.createOwned(active.artifact(id), token: id)
-                try FileManager.default.copyItem(at: candidate, to: active.staged(id))
-                try NativeArchive.validate(active.staged(id), version: selected.version)
-                let journal = UpdateJournal(token: id, app: app, data: data, version: selected.version, oldVersion: currentVersion, hash: digest,
+                try await Task.detached {
+                    try FileManager.default.copyItem(at: prepared.0, to: active.staged(id))
+                    try NativeArchive.validate(active.staged(id), version: selected.version)
+                }.value
+                try Task.checkCancellation()
+                let journal = UpdateJournal(token: id, app: app, data: data, version: selected.version, oldVersion: currentVersion, hash: prepared.1,
                                             parentPID: ProcessInfo.processInfo.processIdentifier)
                 try active.save(journal); keep = true
                 lock = nil // The separate helper takes over the transaction lock.

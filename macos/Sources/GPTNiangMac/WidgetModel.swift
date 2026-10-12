@@ -33,6 +33,12 @@ final class WidgetModel: ObservableObject {
     let defaults: UserDefaults
     private var worker: Process?
     var workerRunning: Bool { worker?.isRunning == true }
+    var updateIdle: Bool {
+        guard !refreshing else { return false }
+        let file = dataDirectory.appendingPathComponent("worker-status.json")
+        let status = (try? Data(contentsOf: file)).flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+        return status?["busy"] as? Bool != true
+    }
     private var stderr: FileHandle?
     private var timer: Timer?
     private var quotes: [Quote] = []
