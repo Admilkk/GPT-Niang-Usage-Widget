@@ -106,8 +106,10 @@ try {
   Assert (!(Test-Path -LiteralPath $journal.backup)) 'committed status failure does not skip automatic cleanup'
 
   $journal=New-Fixture 'embedded-data' -Embedded
+  [IO.File]::WriteAllText((Join-Path $journal.root 'user-note.txt'),'personal note alongside embedded state')
   Invoke-WidgetUpdateTransaction $journal $script:agent $journal.token
   Assert ($journal.phase-eq 'committed' -and [IO.File]::ReadAllText((Join-Path $journal.dataDir 'quotes.txt'))-eq 'custom quote') 'embedded data copied and verified before replacement'
+  Assert ([IO.File]::ReadAllText((Join-Path $journal.root 'user-note.txt'))-eq 'personal note alongside embedded state') 'embedded state and unrelated personal files are preserved together'
 
   $journal=New-Fixture 'data-collision' -Embedded
   $null=New-Item -ItemType Directory -Path (Join-Path $journal.candidate 'state')

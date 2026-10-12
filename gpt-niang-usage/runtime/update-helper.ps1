@@ -107,10 +107,11 @@ function Copy-WidgetUnmanagedRootItems($Journal,[switch]$EmbeddedData) {
   foreach($item in @(Get-ChildItem -LiteralPath $Journal.root -Force)){
     if($item.Name-in $managed){continue}
     $containsData=$Journal.dataDir-ieq $item.FullName -or $Journal.dataDir.StartsWith($item.FullName+'\',[StringComparison]::OrdinalIgnoreCase)
+    if($EmbeddedData -and !$containsData){continue}
     $target=Join-Path $Journal.nextRoot $item.Name
     Assert-WidgetUpdateChildPath $target $Journal.nextRoot
     if(Test-Path -LiteralPath $target){throw ('Candidate overlaps a personal file or directory: '+$item.Name)}
-    if($containsData -ne [bool]$EmbeddedData){continue}
+    if(!$EmbeddedData -and $containsData){continue}
     Assert-WidgetNoReparsePoint $item.FullName
     if($item.PSIsContainer){Copy-WidgetVerifiedTree $item.FullName $target}
     else {

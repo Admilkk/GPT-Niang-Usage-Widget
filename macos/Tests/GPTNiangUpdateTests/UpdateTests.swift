@@ -147,7 +147,7 @@ final class UpdateTests: XCTestCase {
     }
     func testConcurrentUpdateLockIsExclusive() throws {
         let (store, _) = try fixture(); let lock = try UpdateLock(at: store.data)
-        withExtendedLifetime(lock) { XCTAssertThrowsError(try UpdateLock(at: store.data)) }
+        try withExtendedLifetime(lock) { XCTAssertThrowsError(try UpdateLock(at: store.data)) }
     }
     private func zip(_ names: [String], mode: Int = 0x8000) -> Data {
         var local = Data(), directory = Data()

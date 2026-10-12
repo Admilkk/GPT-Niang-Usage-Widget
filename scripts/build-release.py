@@ -20,6 +20,7 @@ heading = f"## {version}\n"
 if heading not in changelog or changelog.split("## ", 1)[1].splitlines()[0] != version:
     raise SystemExit("The first changelog entry must match the release version")
 changes = changelog.split(heading, 1)[1].split("\n## ", 1)[0].strip()
+credits = (root / 'README.md').read_text(encoding='utf-8-sig').split('## 致谢与许可\n\n', 1)[1].split('\n\n交互参考', 1)[0]
 tracked = subprocess.check_output(
     ["git", "ls-files", "-z"], cwd=root
 ).decode("utf-8").split("\0")
@@ -82,7 +83,7 @@ notes = (
     "旧版用户请先备份自定义内容，在原目录覆盖新版文件，再运行安装器；保留原有偏好。\n\n"
     "仅支持 Windows 10 / 11，需要 Node.js 20 或更新版本及已登录的 Codex 桌面端。\n\n"
     f"SHA256：`{digest}`（同时提供 `SHA256SUMS.txt`）。\n\n"
-    "感谢 @Admilkk 在 PR #1 中贡献额度展示、账号隔离与后台可靠性修复，以及 @FusaishiHaruaki-afk 在 PR #8 / #9 中提供 Go 实测、按窗口时长适配及 Mac 构建兼容修复。\n"
+    f"### 致谢\n\n{credits}\n"
 )
 (dist / "release-notes.md").write_text(notes, encoding="utf-8")
 print(f"Built {archive_name}: {len(files)} files; SHA256 {digest}")
