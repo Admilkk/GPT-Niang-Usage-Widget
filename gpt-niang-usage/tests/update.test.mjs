@@ -36,7 +36,12 @@ function release(bytes,version='1.3.3') {
   const name=`gpt-niang-usage-widget-v${version}-windows.zip`,base=`https://github.com/T7moris/GPT-Niang-Usage-Widget/releases/download/v${version}/`;
   return {tag_name:'v'+version,assets:[{name,browser_download_url:base+name,size:bytes.length,digest:'sha256:'+createHash('sha256').update(bytes).digest('hex')},{name:'SHA256SUMS.txt',browser_download_url:base+'SHA256SUMS.txt'}]};
 }
-function temporary(t) {const dir=fs.mkdtempSync(path.join(os.tmpdir(),'gpt-niang-update-'));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));return dir;}
+function temporary(t) {
+  // macOS exposes its temporary directory through /var -> /private/var.
+  // Give the Windows updater fixture a canonical path without weakening link checks.
+  const dir=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'gpt-niang-update-')));
+  t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));return dir;
+}
 function setup(t,bytes=zipFixture(packageFiles())) {
   const dir=temporary(t),config={appDir:path.join(dir,'app','gpt-niang-usage'),dataDir:path.join(dir,'data'),version:'1.3.2'};
   fs.mkdirSync(config.appDir,{recursive:true});fs.mkdirSync(config.dataDir);
@@ -115,12 +120,14 @@ test('automatic disabled makes no request; enabling checks immediately; source c
 test('a disabled toggle before installation cancels automatic work',async t=>{
   const {config,options}=setup(t);options.waitIdle=async()=>{fs.writeFileSync(path.join(config.dataDir,'update-preferences.json'),'{"automatic":false}');return true;};
   await runUpdate(config,{...options,mode:'automatic'});assert.equal(options.installs,0);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(config.dataDir,'update-status.json'))).cleanupError,undefined);
   assert.deepEqual(fs.readdirSync(path.join(config.dataDir,'updates')),[]);
 });
 test('cancelled idle wait removes its download without touching user preferences',async t=>{
   const {config,options}=setup(t);options.waitIdle=async()=>false;
   const preferences=path.join(config.dataDir,'settings.json');fs.writeFileSync(preferences,'{"scale":1.4}');
   await runUpdate(config,{...options,mode:'automatic'});
+  assert.equal(JSON.parse(fs.readFileSync(path.join(config.dataDir,'update-status.json'))).cleanupError,undefined);
   assert.equal(options.installs,0);assert.deepEqual(fs.readdirSync(path.join(config.dataDir,'updates')),[]);
   assert.equal(fs.readFileSync(preferences,'utf8'),'{"scale":1.4}');
 });
